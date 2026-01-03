@@ -21,6 +21,7 @@ type TablesConfig = {
   // dictionary items（例如 QsDictionaryItem / TsDictionaryItem）
   dictionaryItem?: string;
   user: string;
+  department?: string;
 };
 
 export type EcpMapping = {
@@ -36,6 +37,10 @@ export type EcpMapping = {
     departmentId?: string;
     ownerUserId?: string;
     projectType?: string;
+  };
+  department?: {
+    id: string;
+    name: string;
   };
   task: {
     id: string;
@@ -171,11 +176,12 @@ export async function getEcpMapping(): Promise<EcpMapping> {
     time: cfg?.ecp?.tables?.timeDetail || cfg?.ecp?.tables?.time || 'TcTimeReportDetail',
     timeReport: cfg?.ecp?.tables?.timeReport || 'TcTimeReport',
     dictionaryItem: cfg?.ecp?.tables?.dictionaryItem || cfg?.ecp?.tables?.dictionary || 'QsDictionaryItem',
-    user: cfg?.ecp?.tables?.user || 'TsUser'
+    user: cfg?.ecp?.tables?.user || 'TsUser',
+    department: cfg?.ecp?.tables?.department || 'TsDepartment'
   };
 
   const tablesToLoad = Array.from(
-    new Set([tables.project, tables.task, tables.time, tables.user, tables.timeReport, tables.dictionaryItem].filter(Boolean))
+    new Set([tables.project, tables.task, tables.time, tables.user, tables.timeReport, tables.dictionaryItem, tables.department].filter(Boolean))
   ) as string[];
 
   const needLoad = tablesToLoad.some((t) => !globalCache.__ecpCols!.has(t));
@@ -188,6 +194,7 @@ export async function getEcpMapping(): Promise<EcpMapping> {
     const uCols = globalCache.__ecpCols!.get(tables.user)!;
     const thCols = tables.timeReport ? globalCache.__ecpCols!.get(tables.timeReport) || [] : [];
     const diCols = tables.dictionaryItem ? globalCache.__ecpCols!.get(tables.dictionaryItem) || [] : [];
+    const deptCols = tables.department ? globalCache.__ecpCols!.get(tables.department) || [] : [];
 
     const mapping: EcpMapping = {
       tables,
@@ -306,6 +313,13 @@ export async function getEcpMapping(): Promise<EcpMapping> {
       mapping.dictionaryItem.text = keep(diSet, mapping.dictionaryItem.text) || mapping.dictionaryItem.text;
     }
 
+    if (deptCols.length > 0) {
+      mapping.department = {
+        id: pick(deptCols, ['FId', 'id', 'departmentId', 'deptId']) || '',
+        name: pick(deptCols, ['FName', 'name', 'departmentName', 'deptName']) || ''
+      };
+    }
+
     mapping.user.account = keep(uSet, mapping.user.account);
     mapping.user.departmentId = keep(uSet, mapping.user.departmentId);
     mapping.user.departmentName = keep(uSet, mapping.user.departmentName);
@@ -340,6 +354,8 @@ export async function getEcpMapping(): Promise<EcpMapping> {
     const thSet = new Set(th2.map((c) => c.column_name));
     const uSet = new Set(u2.map((c) => c.column_name));
     const diSet = new Set(di2.map((c) => c.column_name));
+    // deptCols is already loaded if exists
+    // const deptSet ...
 
     const keep = (set: Set<string>, v?: string) => (v && set.has(v) ? v : undefined);
 

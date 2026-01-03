@@ -63,7 +63,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ projectId: stri
   if (!project) return Response.json({ error: 'project not found' }, { status: 404 });
 
   const taskCountSql = `SELECT COUNT(1) AS task_count FROM ${T} t WHERE t.${tProjectId} = ?`;
-  const taskCount = (await prisma.$queryRawUnsafe<any[]>(taskCountSql, projectId))[0]?.task_count ?? 0;
+  const taskCount = Number((await prisma.$queryRawUnsafe<any[]>(taskCountSql, projectId))[0]?.task_count ?? 0);
 
   // 1) 專案已填報時數：任務本身 actualHours 加總（不受日期篩選影響）
   const projectActualSql = tHours
@@ -75,7 +75,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ projectId: stri
     : `
       SELECT 0 AS actual_hours
     `;
-  const projectActual = (await prisma.$queryRawUnsafe<Array<{ actual_hours: number }>>(projectActualSql, projectId))?.[0]?.actual_hours ?? 0;
+  const projectActual = Number((await prisma.$queryRawUnsafe<Array<{ actual_hours: number }>>(projectActualSql, projectId))?.[0]?.actual_hours ?? 0);
 
   // 2) 人數：仍用工時填報（可選日期/人員/部門）
   let peopleSql = `
@@ -90,7 +90,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ projectId: stri
     peopleSql += ` AND EXISTS (
       SELECT 1 FROM ${TH} th
       WHERE th.${thId} = te.${tdTimeReportId}
-        AND th.${thDate} BETWEEN ? AND ?
+      AND th.${thDate} BETWEEN ? AND ?
     )`;
     args.push(from, to);
   }
@@ -104,7 +104,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ projectId: stri
   }
 
   const people = await prisma.$queryRawUnsafe<Array<{ people_count: number }>>(peopleSql, ...args);
-  const peopleCount = people?.[0]?.people_count ?? 0;
+  const peopleCount = Number(people?.[0]?.people_count ?? 0);
 
   return Response.json({
     ...project,
