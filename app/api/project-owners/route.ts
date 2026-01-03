@@ -31,6 +31,10 @@ export async function GET(req: Request) {
   where += ` AND p.${pName} NOT LIKE ?`;
   args.push('%新人%');
 
+  // 顯示【AI】開頭的專案
+  where += ` AND p.${pName} LIKE ?`;
+  args.push('【AI】%');
+
   // 排除成功關閉
   if (pStatus) where += ` AND p.${pStatus} NOT IN ('Finished','FinishAuditing','Discarded','Cancel')`;
 

@@ -21,6 +21,7 @@ export async function GET() {
       ${nameExpr} AS name
     FROM ${U} u
     WHERE ${idExpr} IS NOT NULL AND ${idExpr} <> ''
+      AND (${nameExpr} LIKE '%專案一部%' OR ${nameExpr} LIKE '%專案二部%')
     ORDER BY name ASC
   `;
   const rows = await prisma.$queryRawUnsafe<any[]>(sql);

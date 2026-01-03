@@ -16,6 +16,7 @@ type Project = {
   owner_user_id?: string | number | null;
   owner_name?: string | null;
   project_type?: string | null;
+  department_id?: string | number | null;
 };
 
 type DepartmentId = string | number;
@@ -190,6 +191,16 @@ export default function DashboardClient() {
   const peopleRows: PeopleRow[] = (peopleBreakdown?.people || []) as any;
   const taskRows: TaskRow[] = (tasksBreakdown?.tasks || []) as any;
 
+  const selectedProject = useMemo(
+    () => (projectId ? projects.find((p) => String(p.id) === String(projectId)) || null : null),
+    [projects, projectId]
+  );
+  const selectedDepartmentName = useMemo(() => {
+    if (!selectedProject?.department_id) return null;
+    const hit = departments.find((d) => String(d.id) === String(selectedProject.department_id));
+    return hit?.name || null;
+  }, [departments, selectedProject?.department_id]);
+
   const selectedPerson = useMemo(
     () => (selectedPersonId ? peopleRows.find((r) => String(r.person_id) === String(selectedPersonId)) : null),
     [peopleRows, selectedPersonId]
@@ -255,7 +266,8 @@ export default function DashboardClient() {
             <select className="field__control" value={projectId} onChange={(e) => setProjectId(e.target.value)}>
               {projects.map((p) => {
                 const typeTag = p.project_type ? `【${p.project_type}】` : '';
-                const label = `${typeTag}${p.code ? `${p.code}｜` : ''}${p.name}`;
+                const statusTag = p.status ? `（${toZhStatus(p.status)}）` : '';
+                const label = `${typeTag}${p.code ? `${p.code}｜` : ''}${p.name}${statusTag}`;
                 return (
                   <option key={String(p.id)} value={String(p.id)}>
                     {label}
@@ -303,6 +315,23 @@ export default function DashboardClient() {
           <div className="card">
             <div className="card__label">剩餘 / 超支</div>
             <div className="card__value">{fmtHours(Math.abs(diff))} h</div>
+          </div>
+          <div className="card">
+            <div className="card__label">專案資訊</div>
+            <div className="card__hint" style={{ marginTop: 6, lineHeight: 1.65 }}>
+              <div>
+                <span className="muted">部門：</span>
+                {selectedDepartmentName || <span className="muted">--</span>}
+              </div>
+              <div>
+                <span className="muted">狀態：</span>
+                {selectedProject?.status ? toZhStatus(selectedProject.status) : <span className="muted">--</span>}
+              </div>
+              <div>
+                <span className="muted">負責人：</span>
+                {selectedProject?.owner_name || <span className="muted">--</span>}
+              </div>
+            </div>
           </div>
         </section>
 

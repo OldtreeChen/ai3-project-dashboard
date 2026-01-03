@@ -258,6 +258,58 @@ export async function getEcpMapping(): Promise<EcpMapping> {
     if (override?.dictionaryItem && mapping.dictionaryItem) mapping.dictionaryItem = { ...mapping.dictionaryItem, ...override.dictionaryItem };
     if (override?.user) mapping.user = { ...mapping.user, ...override.user };
 
+    // validate overrides: drop any column mapping that doesn't exist in the actual table
+    const pSet = new Set(pCols.map((c) => c.column_name));
+    const tSet = new Set(tCols.map((c) => c.column_name));
+    const tdSet = new Set(tdCols.map((c) => c.column_name));
+    const thSet = new Set(thCols.map((c) => c.column_name));
+    const uSet = new Set(uCols.map((c) => c.column_name));
+    const diSet = new Set(diCols.map((c) => c.column_name));
+
+    const keep = (set: Set<string>, v?: string) => (v && set.has(v) ? v : undefined);
+
+    mapping.project.code = keep(pSet, mapping.project.code);
+    mapping.project.plannedHours = keep(pSet, mapping.project.plannedHours);
+    mapping.project.startDate = keep(pSet, mapping.project.startDate);
+    mapping.project.endDate = keep(pSet, mapping.project.endDate);
+    mapping.project.status = keep(pSet, mapping.project.status);
+    mapping.project.departmentId = keep(pSet, mapping.project.departmentId);
+    mapping.project.ownerUserId = keep(pSet, mapping.project.ownerUserId);
+    mapping.project.projectType = keep(pSet, mapping.project.projectType);
+
+    mapping.task.executorUserId = keep(tSet, mapping.task.executorUserId);
+    mapping.task.ownerUserId = keep(tSet, mapping.task.ownerUserId);
+    mapping.task.plannedHours = keep(tSet, mapping.task.plannedHours);
+    mapping.task.actualHours = keep(tSet, mapping.task.actualHours);
+    mapping.task.status = keep(tSet, mapping.task.status);
+    mapping.task.plannedEndAt = keep(tSet, mapping.task.plannedEndAt);
+    mapping.task.completedAt = keep(tSet, mapping.task.completedAt);
+    mapping.task.receivedAt = keep(tSet, mapping.task.receivedAt);
+
+    mapping.time.id = keep(tdSet, mapping.time.id);
+    mapping.time.timeReportId = keep(tdSet, mapping.time.timeReportId);
+    mapping.time.projectId = keep(tdSet, mapping.time.projectId);
+    mapping.time.taskId = keep(tdSet, mapping.time.taskId) || mapping.time.taskId;
+    mapping.time.userId = keep(tdSet, mapping.time.userId) || mapping.time.userId;
+    mapping.time.hours = keep(tdSet, mapping.time.hours) || mapping.time.hours;
+
+    if (mapping.timeReport) {
+      mapping.timeReport.id = keep(thSet, mapping.timeReport.id) || mapping.timeReport.id;
+      mapping.timeReport.workDate = keep(thSet, mapping.timeReport.workDate) || mapping.timeReport.workDate;
+      mapping.timeReport.userId = keep(thSet, mapping.timeReport.userId);
+      mapping.timeReport.departmentId = keep(thSet, mapping.timeReport.departmentId);
+    }
+
+    if (mapping.dictionaryItem) {
+      mapping.dictionaryItem.dictionaryId = keep(diSet, mapping.dictionaryItem.dictionaryId) || mapping.dictionaryItem.dictionaryId;
+      mapping.dictionaryItem.value = keep(diSet, mapping.dictionaryItem.value) || mapping.dictionaryItem.value;
+      mapping.dictionaryItem.text = keep(diSet, mapping.dictionaryItem.text) || mapping.dictionaryItem.text;
+    }
+
+    mapping.user.account = keep(uSet, mapping.user.account);
+    mapping.user.departmentId = keep(uSet, mapping.user.departmentId);
+    mapping.user.departmentName = keep(uSet, mapping.user.departmentName);
+
     if (!mapping.project.id || !mapping.project.name || !mapping.task.id || !mapping.task.projectId || !mapping.task.name || !mapping.user.id || !mapping.user.displayName) {
       throw new Error(
         [
@@ -268,6 +320,72 @@ export async function getEcpMapping(): Promise<EcpMapping> {
     }
 
     globalCache.__ecpMapping = mapping;
+  }
+
+  // Always sanitize cached mapping as config.json may change and global cache survives hot reload.
+  // This prevents returning mappings pointing to non-existent columns (e.g. FOwnerUserId).
+  try {
+    const m2 = globalCache.__ecpMapping!;
+    const cols2 = globalCache.__ecpCols!;
+    const p2 = cols2.get(m2.tables.project) || [];
+    const t2 = cols2.get(m2.tables.task) || [];
+    const td2 = cols2.get(m2.tables.time) || [];
+    const u2 = cols2.get(m2.tables.user) || [];
+    const th2 = m2.tables.timeReport ? (cols2.get(m2.tables.timeReport) || []) : [];
+    const di2 = m2.tables.dictionaryItem ? (cols2.get(m2.tables.dictionaryItem) || []) : [];
+
+    const pSet = new Set(p2.map((c) => c.column_name));
+    const tSet = new Set(t2.map((c) => c.column_name));
+    const tdSet = new Set(td2.map((c) => c.column_name));
+    const thSet = new Set(th2.map((c) => c.column_name));
+    const uSet = new Set(u2.map((c) => c.column_name));
+    const diSet = new Set(di2.map((c) => c.column_name));
+
+    const keep = (set: Set<string>, v?: string) => (v && set.has(v) ? v : undefined);
+
+    m2.project.code = keep(pSet, m2.project.code);
+    m2.project.plannedHours = keep(pSet, m2.project.plannedHours);
+    m2.project.startDate = keep(pSet, m2.project.startDate);
+    m2.project.endDate = keep(pSet, m2.project.endDate);
+    m2.project.status = keep(pSet, m2.project.status);
+    m2.project.departmentId = keep(pSet, m2.project.departmentId);
+    m2.project.ownerUserId = keep(pSet, m2.project.ownerUserId);
+    m2.project.projectType = keep(pSet, m2.project.projectType);
+
+    m2.task.executorUserId = keep(tSet, m2.task.executorUserId);
+    m2.task.ownerUserId = keep(tSet, m2.task.ownerUserId);
+    m2.task.plannedHours = keep(tSet, m2.task.plannedHours);
+    m2.task.actualHours = keep(tSet, m2.task.actualHours);
+    m2.task.status = keep(tSet, m2.task.status);
+    m2.task.plannedEndAt = keep(tSet, m2.task.plannedEndAt);
+    m2.task.completedAt = keep(tSet, m2.task.completedAt);
+    m2.task.receivedAt = keep(tSet, m2.task.receivedAt);
+
+    m2.time.id = keep(tdSet, m2.time.id);
+    m2.time.timeReportId = keep(tdSet, m2.time.timeReportId);
+    m2.time.projectId = keep(tdSet, m2.time.projectId);
+    m2.time.taskId = keep(tdSet, m2.time.taskId) || m2.time.taskId;
+    m2.time.userId = keep(tdSet, m2.time.userId) || m2.time.userId;
+    m2.time.hours = keep(tdSet, m2.time.hours) || m2.time.hours;
+
+    if (m2.timeReport) {
+      m2.timeReport.id = keep(thSet, m2.timeReport.id) || m2.timeReport.id;
+      m2.timeReport.workDate = keep(thSet, m2.timeReport.workDate) || m2.timeReport.workDate;
+      m2.timeReport.userId = keep(thSet, m2.timeReport.userId);
+      m2.timeReport.departmentId = keep(thSet, m2.timeReport.departmentId);
+    }
+
+    if (m2.dictionaryItem) {
+      m2.dictionaryItem.dictionaryId = keep(diSet, m2.dictionaryItem.dictionaryId) || m2.dictionaryItem.dictionaryId;
+      m2.dictionaryItem.value = keep(diSet, m2.dictionaryItem.value) || m2.dictionaryItem.value;
+      m2.dictionaryItem.text = keep(diSet, m2.dictionaryItem.text) || m2.dictionaryItem.text;
+    }
+
+    m2.user.account = keep(uSet, m2.user.account);
+    m2.user.departmentId = keep(uSet, m2.user.departmentId);
+    m2.user.departmentName = keep(uSet, m2.user.departmentName);
+  } catch {
+    // ignore sanitize errors; mapping will be validated by API usage anyway
   }
 
   return globalCache.__ecpMapping!;
