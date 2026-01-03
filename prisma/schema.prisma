@@ -1,0 +1,20 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  // MariaDB 請使用 mysql provider
+  provider = "mysql"
+  // 由於此環境禁止寫入 .env，CLI 操作時請用 PowerShell 注入：
+  // $env:DATABASE_URL="mysql://USER:PASSWORD@HOST:3306/DBNAME"
+  url = env("DATABASE_URL")
+}
+
+// 你要對接「既有 DB 表」時，建議用：
+// - npx prisma db pull   （把既有表拉成 models）
+// - npx prisma generate
+// 然後再視需要把 models 精修。
+//
+// 目前 hours-dashboard 的查詢以 raw SQL 為主（可直接查既有表，不需先定義 model）。
+
+

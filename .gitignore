@@ -1,0 +1,16 @@
+node_modules/
+.next/
+.turbo/
+
+# local secrets
+config.json
+.env
+
+# prisma
+prisma/migrations/
+
+
+data/
+npm-debug.log*
+.DS_Store
+Thumbs.db

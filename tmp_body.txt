@@ -1,0 +1,1 @@
+{"ok":false,"error":"\nInvalid `prisma.$queryRawUnsafe()` invocation:\n\n\nRaw query failed. Code: `1615`. Message: `Prepared statement needs to be re-prepared`","hint":["若看到 1615 (Prepared statement needs to be re-prepared)，通常是 MySQL/Prisma 的 prepared statement 問題。","也可能是資料表/VIEW 權限或不存在（例如 TsDepartment / VcTimeReportSrcAna）。"]}

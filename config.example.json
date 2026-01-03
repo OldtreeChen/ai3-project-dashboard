@@ -1,0 +1,7 @@
+{
+  "port": 5179,
+  "dbPath": "./data/hours.db",
+  "databaseUrl": "mysql://USER:PASSWORD@HOST:3306/DBNAME"
+}
+
+

@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>專案工時儀表板</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand__title">專案工時儀表板</div>
+        <div class="brand__sub">Projects / Tasks / People / Hours</div>
+      </div>
+
+      <div class="filters">
+        <label class="field">
+          <span class="field__label">專案</span>
+          <select id="projectSelect" class="field__control"></select>
+        </label>
+
+        <label class="field">
+          <span class="field__label">部門</span>
+          <select id="departmentSelect" class="field__control">
+            <option value="">全部</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span class="field__label">人員</span>
+          <select id="personSelect" class="field__control">
+            <option value="">全部</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span class="field__label">起日</span>
+          <input id="fromDate" class="field__control" type="date" />
+        </label>
+
+        <label class="field">
+          <span class="field__label">迄日</span>
+          <input id="toDate" class="field__control" type="date" />
+        </label>
+
+        <button id="applyBtn" class="btn btn--primary">套用</button>
+        <button id="resetBtn" class="btn">清除</button>
+      </div>
+    </header>
+
+    <main class="content">
+      <section class="panel">
+        <div class="panel__header">
+          <div class="panel__title">每日工時趨勢</div>
+          <div id="trendMeta" class="panel__meta"></div>
+        </div>
+        <div class="panel__body">
+          <div id="trendChart" class="chart"></div>
+        </div>
+      </section>
+
+      <section class="cards">
+        <div class="card">
+          <div class="card__label">專案預估時數</div>
+          <div id="plannedHours" class="card__value">--</div>
+        </div>
+        <div class="card">
+          <div class="card__label">已填報時數</div>
+          <div id="actualHours" class="card__value">--</div>
+        </div>
+        <div class="card">
+          <div class="card__label">剩餘 / 超支</div>
+          <div id="remainingHours" class="card__value">--</div>
+          <div id="remainingHint" class="card__hint"></div>
+        </div>
+        <div class="card">
+          <div class="card__label">進度</div>
+          <div class="progress">
+            <div id="progressBar" class="progress__bar" style="width:0%"></div>
+          </div>
+          <div id="progressText" class="card__hint">--</div>
+        </div>
+      </section>
+
+      <section class="grid">
+        <div class="panel">
+          <div class="panel__header">
+            <div class="panel__title">人員工時（彙總）</div>
+            <div id="peopleMeta" class="panel__meta"></div>
+          </div>
+          <div class="panel__body">
+            <table class="table" id="peopleTable">
+              <thead>
+                <tr>
+                  <th>人員</th>
+                  <th class="num">時數</th>
+                  <th class="num">涉及任務數</th>
+                  <th>視覺</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel__header">
+            <div class="panel__title">任務工時（彙總）</div>
+            <div id="tasksMeta" class="panel__meta"></div>
+          </div>
+          <div class="panel__body">
+            <table class="table" id="tasksTable">
+              <thead>
+                <tr>
+                  <th>任務</th>
+                  <th>負責人</th>
+                  <th class="num">預估</th>
+                  <th class="num">已用</th>
+                  <th class="num">差異</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel__header">
+          <div class="panel__title">人員 × 任務 工時矩陣</div>
+          <div class="panel__meta">用來快速看「每個人在哪些任務上花了多少時間」</div>
+        </div>
+        <div class="panel__body">
+          <div class="table-scroll">
+            <table class="table" id="matrixTable">
+              <thead></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="footer-note">
+        <div class="muted">
+          提示：目前資料來自 SQLite 範例資料。等你提供實際資料庫類型與連線資訊後，我會把查詢改為連真 DB。
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
+
+
