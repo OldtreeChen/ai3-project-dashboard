@@ -1,6 +1,8 @@
 import { prisma } from '@/lib/prisma';
-import { getEcpMapping, sqlId } from '@/lib/ecpSchema';
+import { getEcpColumns, getEcpMapping, sqlId } from '@/lib/ecpSchema';
 import { getDictionaryTextsByValues } from '@/lib/dictionary';
+import { getProjectOwnerColumn } from '@/lib/projectOwner';
+import { getProjectTypeColumn } from '@/lib/projectType';
 import { parseIdParam, parseIntParam } from '../_utils';
 
 export const dynamic = 'force-dynamic';
@@ -13,24 +15,33 @@ export async function GET(req: Request) {
   const limit = parseIntParam(url.searchParams.get('limit')) || 500;
 
   const m = await getEcpMapping();
+  const colsInfo = await getEcpColumns();
+  const pCols = (colsInfo.columns as any)?.[m.tables.project] as Array<{ column_name: string }> | undefined;
+  const tCols = (colsInfo.columns as any)?.[m.tables.task] as Array<{ column_name: string }> | undefined;
+  const pSet = new Set((pCols || []).map((c) => c.column_name));
+  const tSet = new Set((tCols || []).map((c) => c.column_name));
+  const pIf = (col?: string) => (col && pSet.has(col) ? sqlId(col) : null);
+  const tIf = (col?: string) => (col && tSet.has(col) ? sqlId(col) : null);
 
   const P = sqlId(m.tables.project);
   const T = sqlId(m.tables.task);
   const U = sqlId(m.tables.user);
 
   const pId = sqlId(m.project.id);
-  const pCode = m.project.code ? sqlId(m.project.code) : null;
+  const pCode = pIf(m.project.code);
   const pName = sqlId(m.project.name);
-  const pPlanned = m.project.plannedHours ? sqlId(m.project.plannedHours) : null;
-  const pStart = m.project.startDate ? sqlId(m.project.startDate) : null;
-  const pEnd = m.project.endDate ? sqlId(m.project.endDate) : null;
-  const pStatus = m.project.status ? sqlId(m.project.status) : null;
-  const pDeptId = m.project.departmentId ? sqlId(m.project.departmentId) : null;
-  const pOwner = m.project.ownerUserId ? sqlId(m.project.ownerUserId) : null;
-  const pType = m.project.projectType ? sqlId(m.project.projectType) : null;
+  const pPlanned = pIf(m.project.plannedHours);
+  const pStart = pIf(m.project.startDate);
+  const pEnd = pIf(m.project.endDate);
+  const pStatus = pIf(m.project.status);
+  const pDeptId = pIf(m.project.departmentId);
+  const ownerCol = await getProjectOwnerColumn();
+  const pOwner = ownerCol && pSet.has(ownerCol) ? sqlId(ownerCol) : null;
+  const typeCol = await getProjectTypeColumn();
+  const pType = typeCol && pSet.has(typeCol) ? sqlId(typeCol) : null;
 
   const tProjectId = sqlId(m.task.projectId);
-  const tActual = m.task.actualHours ? sqlId(m.task.actualHours) : null;
+  const tActual = tIf(m.task.actualHours);
 
   const uId = sqlId(m.user.id);
   const uName = sqlId(m.user.displayName);

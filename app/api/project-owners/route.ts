@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { getEcpMapping, sqlId } from '@/lib/ecpSchema';
+import { getProjectOwnerColumn } from '@/lib/projectOwner';
 import { parseIdParam } from '../_utils';
 
 export const dynamic = 'force-dynamic';
@@ -13,7 +14,8 @@ export async function GET(req: Request) {
   const U = sqlId(m.tables.user);
 
   const pName = sqlId(m.project.name);
-  const pOwner = m.project.ownerUserId ? sqlId(m.project.ownerUserId) : null;
+  const ownerCol = await getProjectOwnerColumn();
+  const pOwner = ownerCol ? sqlId(ownerCol) : null;
   const pDeptId = m.project.departmentId ? sqlId(m.project.departmentId) : null;
   const pStatus = m.project.status ? sqlId(m.project.status) : null;
 

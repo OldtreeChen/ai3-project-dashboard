@@ -135,7 +135,12 @@ async function loadColumns(tableName: string) {
         AND c.table_name = ?
       ORDER BY c.ordinal_position ASC
     `;
-    return await prisma.$queryRawUnsafe<ColumnRow[]>(sql, tableName);
+    const rows = await prisma.$queryRawUnsafe<ColumnRow[]>(sql, tableName);
+    // Prisma may return BIGINT as JS BigInt; normalize to number for JSON safety.
+    return rows.map((r) => ({
+      ...r,
+      ordinal_position: Number((r as any).ordinal_position)
+    }));
   } catch {
     type ShowRow = { Field: string; Type: string; Null: 'YES' | 'NO'; Key: string; Comment: string };
     const t = sqlId(tableName);
@@ -271,15 +276,20 @@ export async function getEcpMapping(): Promise<EcpMapping> {
 export async function getEcpColumns() {
   const m = await getEcpMapping();
   const cols = globalCache.__ecpCols!;
+  const normalize = (rows: ColumnRow[]) =>
+    (rows || []).map((r) => ({
+      ...r,
+      ordinal_position: Number((r as any).ordinal_position)
+    }));
   return {
     tables: m.tables,
     columns: {
-      [m.tables.project]: cols.get(m.tables.project) || [],
-      [m.tables.task]: cols.get(m.tables.task) || [],
-      [m.tables.time]: cols.get(m.tables.time) || [],
-      [m.tables.user]: cols.get(m.tables.user) || [],
-      ...(m.tables.timeReport ? { [m.tables.timeReport]: cols.get(m.tables.timeReport) || [] } : {}),
-      ...(m.tables.dictionaryItem ? { [m.tables.dictionaryItem]: cols.get(m.tables.dictionaryItem) || [] } : {})
+      [m.tables.project]: normalize(cols.get(m.tables.project) || []),
+      [m.tables.task]: normalize(cols.get(m.tables.task) || []),
+      [m.tables.time]: normalize(cols.get(m.tables.time) || []),
+      [m.tables.user]: normalize(cols.get(m.tables.user) || []),
+      ...(m.tables.timeReport ? { [m.tables.timeReport]: normalize(cols.get(m.tables.timeReport) || []) } : {}),
+      ...(m.tables.dictionaryItem ? { [m.tables.dictionaryItem]: normalize(cols.get(m.tables.dictionaryItem) || []) } : {})
     }
   };
 }

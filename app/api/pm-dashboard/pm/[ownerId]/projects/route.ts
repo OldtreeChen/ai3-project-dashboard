@@ -1,6 +1,8 @@
 import { prisma } from '@/lib/prisma';
 import { getEcpMapping, sqlId } from '@/lib/ecpSchema';
 import { getDictionaryTextsByValues } from '@/lib/dictionary';
+import { getProjectOwnerColumn } from '@/lib/projectOwner';
+import { getProjectTypeColumn } from '@/lib/projectType';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,8 +19,10 @@ export async function GET(_req: Request, ctx: { params: Promise<{ ownerId: strin
   const pName = sqlId(m.project.name);
   const pPlanned = m.project.plannedHours ? sqlId(m.project.plannedHours) : null;
   const pStatus = m.project.status ? sqlId(m.project.status) : null;
-  const pOwner = m.project.ownerUserId ? sqlId(m.project.ownerUserId) : null;
-  const pType = m.project.projectType ? sqlId(m.project.projectType) : null;
+  const ownerCol = await getProjectOwnerColumn();
+  const pOwner = ownerCol ? sqlId(ownerCol) : null;
+  const typeCol = await getProjectTypeColumn();
+  const pType = typeCol ? sqlId(typeCol) : null;
 
   const tProjectId = sqlId(m.task.projectId);
   const tHours = m.task.actualHours ? sqlId(m.task.actualHours) : null;
