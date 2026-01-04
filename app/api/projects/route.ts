@@ -28,6 +28,7 @@ export async function GET(req: Request) {
   const P = sqlId(m.tables.project);
   const T = sqlId(m.tables.task);
   const U = sqlId(m.tables.user);
+  const D = m.tables.department ? sqlId(m.tables.department) : null;
 
   const pId = sqlId(m.project.id);
   const pCode = pIf(m.project.code);
@@ -49,9 +50,19 @@ export async function GET(req: Request) {
 
   const uId = sqlId(m.user.id);
   const uName = sqlId(m.user.displayName);
+  const dId = m.department?.id ? sqlId(m.department.id) : null;
+  const dName = m.department?.name ? sqlId(m.department.name) : null;
 
   const args: Array<string> = [];
   let where = `WHERE 1=1`;
+  let joinDept = '';
+
+  // 只顯示 AI 專案一部 / AI 專案二部 的專案（避免下拉混入其他部門）
+  if (D && dId && dName && pDeptId) {
+    joinDept = `LEFT JOIN ${D} d ON d.${dId} = p.${pDeptId}`;
+    where += ` AND (d.${dName} LIKE ? OR d.${dName} LIKE ?)`;
+    args.push('%AI專案一部%', '%AI專案二部%');
+  }
 
   // 排除新人專案
   where += ` AND p.${pName} NOT LIKE ?`;
@@ -108,6 +119,7 @@ export async function GET(req: Request) {
     FROM ${P} p
     LEFT JOIN ${T} t ON t.${tProjectId} = p.${pId}
     ${pOwner ? `LEFT JOIN ${U} owner ON owner.${uId} = p.${pOwner}` : ''}
+    ${joinDept}
     ${where}
     GROUP BY p.${pId}
     ORDER BY p.${pId} DESC

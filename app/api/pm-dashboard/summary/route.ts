@@ -18,6 +18,7 @@ export async function GET() {
     const pName = sqlId(m.project.name);
     const pPlanned = m.project.plannedHours ? sqlId(m.project.plannedHours) : null;
     const pStatus = m.project.status ? sqlId(m.project.status) : null;
+    const pDeptId = m.project.departmentId ? sqlId(m.project.departmentId) : null;
     const ownerCol = await getProjectOwnerColumn();
     const pOwner = ownerCol ? sqlId(ownerCol) : null;
     const typeCol = await getProjectTypeColumn();
@@ -43,6 +44,11 @@ export async function GET() {
       ? `AND p.${pStatus} IN ('Executing','ExecuteAuditing','ExecuteBack','Overdue','OverdueUpgrade')`
       : '';
 
+    const projectDeptFilter =
+      D && dId && dName && pDeptId
+        ? `AND (dp.${dName} LIKE '%AI專案一部%' OR dp.${dName} LIKE '%AI專案二部%')`
+        : '';
+
     const sql = `
       SELECT
         x.owner_id AS owner_id,
@@ -59,9 +65,11 @@ export async function GET() {
           ${usedExpr} AS used_hours
         FROM ${P} p
         LEFT JOIN ${T} t ON t.${tProjectId} = p.${pId}
+        ${D && dId && dName && pDeptId ? `LEFT JOIN ${D} dp ON dp.${dId} = p.${pDeptId}` : ''}
         WHERE p.${pName} NOT LIKE '%新人%'
           AND p.${pName} LIKE '【AI】%'
           ${executingFilter}
+          ${projectDeptFilter}
         GROUP BY p.${pId}, p.${pOwner}
       ) x
       LEFT JOIN ${U} u ON u.${uId} = x.owner_id

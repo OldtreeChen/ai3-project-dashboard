@@ -14,16 +14,20 @@ export async function GET(_req: Request, ctx: { params: Promise<{ ownerId: strin
   const m = await getEcpMapping();
   const P = sqlId(m.tables.project);
   const T = sqlId(m.tables.task);
+  const D = m.tables.department ? sqlId(m.tables.department) : null;
 
   const pId = sqlId(m.project.id);
   const pCode = m.project.code ? sqlId(m.project.code) : null;
   const pName = sqlId(m.project.name);
   const pPlanned = m.project.plannedHours ? sqlId(m.project.plannedHours) : null;
   const pStatus = m.project.status ? sqlId(m.project.status) : null;
+  const pDeptId = m.project.departmentId ? sqlId(m.project.departmentId) : null;
   const ownerCol = await getProjectOwnerColumn();
   const pOwner = ownerCol ? sqlId(ownerCol) : null;
   const typeCol = await getProjectTypeColumn();
   const pType = typeCol ? sqlId(typeCol) : null;
+  const dId = m.department?.id ? sqlId(m.department.id) : null;
+  const dName = m.department?.name ? sqlId(m.department.name) : null;
 
   const tProjectId = sqlId(m.task.projectId);
   const tHours = m.task.actualHours ? sqlId(m.task.actualHours) : null;
@@ -36,6 +40,10 @@ export async function GET(_req: Request, ctx: { params: Promise<{ ownerId: strin
   const executingFilter = pStatus
     ? `AND p.${pStatus} IN ('Executing','ExecuteAuditing','ExecuteBack','Overdue','OverdueUpgrade')`
     : '';
+  const projectDeptFilter =
+    D && dId && dName && pDeptId
+      ? `AND (d.${dName} LIKE '%AI專案一部%' OR d.${dName} LIKE '%AI專案二部%')`
+      : '';
 
   const sql = `
     SELECT
@@ -49,10 +57,12 @@ export async function GET(_req: Request, ctx: { params: Promise<{ ownerId: strin
       (${plannedAggExpr} - ${usedExpr}) AS remaining_hours
     FROM ${P} p
     LEFT JOIN ${T} t ON t.${tProjectId} = p.${pId}
+    ${D && dId && dName && pDeptId ? `LEFT JOIN ${D} d ON d.${dId} = p.${pDeptId}` : ''}
     WHERE p.${pOwner} = ?
       AND p.${pName} NOT LIKE '%新人%'
       AND p.${pName} LIKE '【AI】%'
       ${executingFilter}
+      ${projectDeptFilter}
     GROUP BY p.${pId}
     ORDER BY remaining_hours DESC, planned_hours DESC, p.${pId} DESC
   `;
