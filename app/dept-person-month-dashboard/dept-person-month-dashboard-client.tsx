@@ -7,7 +7,6 @@ type DepartmentId = string | number;
 type PersonId = string | number;
 
 type Department = { id: DepartmentId; name: string };
-type Person = { id: PersonId; display_name: string; department_id: DepartmentId | null };
 
 type SummaryRow = {
   person_id: PersonId;
@@ -62,10 +61,8 @@ async function apiGet<T>(path: string): Promise<T> {
 
 export default function DeptPersonMonthDashboardClient() {
   const [departments, setDepartments] = useState<Department[]>([]);
-  const [people, setPeople] = useState<Person[]>([]);
 
   const [departmentId, setDepartmentId] = useState<string>('');
-  const [personId, setPersonId] = useState<string>('');
   const [month, setMonth] = useState<string>(toMonthValue());
 
   const [loading, setLoading] = useState(false);
@@ -77,10 +74,11 @@ export default function DeptPersonMonthDashboardClient() {
   const [tasksError, setTasksError] = useState('');
   const [tasks, setTasks] = useState<TaskRow[]>([]);
 
-  const selectedPerson = useMemo(
-    () => (selectedPersonId ? people.find((p) => String(p.id) === String(selectedPersonId)) : null),
-    [people, selectedPersonId]
-  );
+  const selectedPerson = useMemo(() => {
+    if (!selectedPersonId) return null;
+    const hit = rows.find((r) => String(r.person_id) === String(selectedPersonId));
+    return hit ? { id: hit.person_id, display_name: hit.display_name } : null;
+  }, [rows, selectedPersonId]);
 
   useEffect(() => {
     (async () => {
@@ -94,33 +92,11 @@ export default function DeptPersonMonthDashboardClient() {
     })();
   }, []);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        setError('');
-        const q = buildQuery({ departmentId });
-        const rows = await apiGet<any[]>(`/api/people${q}`);
-        const normalized: Person[] = rows.map((r) => ({
-          id: r.id,
-          display_name: r.display_name,
-          department_id: r.department_id ?? null
-        }));
-        setPeople(normalized);
-        setPersonId('');
-        setSelectedPersonId('');
-        setTasks([]);
-        setTasksError('');
-      } catch (e: any) {
-        setError(e?.message || '載入人員失敗');
-      }
-    })();
-  }, [departmentId]);
-
   const loadSummary = async () => {
     setLoading(true);
     setError('');
     try {
-      const q = buildQuery({ month, departmentId, personId });
+      const q = buildQuery({ month, departmentId });
       const data = await apiGet<{ people: SummaryRow[] }>(`/api/dept-person-month/summary${q}`);
       setRows(data.people || []);
       setSelectedPersonId('');
@@ -132,6 +108,12 @@ export default function DeptPersonMonthDashboardClient() {
       setLoading(false);
     }
   };
+
+  // Selecting department/month should be enough; auto query without needing to pick a person
+  useEffect(() => {
+    void loadSummary();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [departmentId, month]);
 
   const toggleDetails = async (pid: string) => {
     const next = String(pid);
@@ -179,24 +161,11 @@ export default function DeptPersonMonthDashboardClient() {
           </label>
 
           <label className="field">
-            <span className="field__label">人員</span>
-            <select className="field__control" value={personId} onChange={(e) => setPersonId(e.target.value)}>
-              <option value="">全部</option>
-              {people.map((p) => (
-                <option key={String(p.id)} value={String(p.id)}>
-                  {p.display_name}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="field">
             <span className="field__label">月份</span>
             <input className="field__control" type="month" value={month} onChange={(e) => setMonth(e.target.value)} />
           </label>
-
           <button className="btn btn--primary" onClick={() => void loadSummary()} disabled={loading}>
-            {loading ? '查詢中…' : '查詢'}
+            {loading ? '查詢中…' : '重新整理'}
           </button>
         </div>
       </header>

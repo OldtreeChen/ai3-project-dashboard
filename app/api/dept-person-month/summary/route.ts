@@ -25,6 +25,7 @@ export async function GET(req: Request) {
     if (!month) return Response.json({ error: 'invalid month (expected YYYY-MM)' }, { status: 400 });
 
     const departmentId = parseIdParam(url.searchParams.get('departmentId'));
+    // personId filter removed from UI; keep param only for backward compatibility
     const personId = parseIdParam(url.searchParams.get('personId'));
 
     const m = await getEcpMapping();
@@ -34,6 +35,7 @@ export async function GET(req: Request) {
     const T = sqlId(m.tables.task);
     const TR = sqlId(m.tables.time);
     const U = sqlId(m.tables.user);
+    const TH = m.tables.timeReport ? sqlId(m.tables.timeReport) : null;
 
     const tId = sqlId(m.task.id);
     const tProjectId = sqlId(m.task.projectId);
@@ -44,6 +46,9 @@ export async function GET(req: Request) {
     const trTaskId = sqlId(m.time.taskId);
     const trUserId = sqlId(m.time.userId);
     const trHours = sqlId(m.time.hours);
+    const trTimeReportId = m.time.timeReportId ? sqlId(m.time.timeReportId) : null;
+    const thId = m.timeReport?.id ? sqlId(m.timeReport.id) : null;
+    const thWorkDate = m.timeReport?.workDate ? sqlId(m.timeReport.workDate) : null;
 
     const uId = sqlId(m.user.id);
     const uName = sqlId(m.user.displayName);
@@ -58,7 +63,20 @@ export async function GET(req: Request) {
 
     const plannedExpr = tPlanned ? `COALESCE(t.${tPlanned}, 0)` : '0';
 
-    const usedSql = `
+    // used hours should be scoped to the selected month (capacity is monthly)
+    const usedSql =
+      TH && trTimeReportId && thId && thWorkDate
+        ? `
+      SELECT
+        tr.${trTaskId} AS task_id,
+        tr.${trUserId} AS person_id,
+        COALESCE(SUM(tr.${trHours}), 0) AS used_hours
+      FROM ${TR} tr
+      LEFT JOIN ${TH} th ON th.${thId} = tr.${trTimeReportId}
+      WHERE th.${thWorkDate} >= ? AND th.${thWorkDate} < ?
+      GROUP BY tr.${trTaskId}, tr.${trUserId}
+    `
+        : `
       SELECT
         tr.${trTaskId} AS task_id,
         tr.${trUserId} AS person_id,
@@ -72,11 +90,12 @@ export async function GET(req: Request) {
         u.${uId} AS person_id,
         u.${uName} AS display_name
         ${uDeptId ? `,u.${uDeptId} AS department_id` : `,NULL AS department_id`},
-        COUNT(1) AS task_count,
-        COALESCE(SUM(ti.planned_hours), 0) AS received_total_hours,
+        COUNT(ti.task_id) AS task_count,
+        COALESCE(SUM(COALESCE(ti.planned_hours, 0)), 0) AS received_total_hours,
         COALESCE(SUM(COALESCE(us.used_hours, 0)), 0) AS used_hours,
-        COALESCE(SUM(ti.planned_hours - COALESCE(us.used_hours, 0)), 0) AS remaining_hours
-      FROM (
+        COALESCE(SUM(COALESCE(ti.planned_hours, 0)), 0) - COALESCE(SUM(COALESCE(us.used_hours, 0)), 0) AS remaining_hours
+      FROM ${U} u
+      LEFT JOIN (
         SELECT
           t.${tId} AS task_id,
           t.${tOwner} AS person_id,
@@ -84,15 +103,18 @@ export async function GET(req: Request) {
         FROM ${T} t
         WHERE t.${tOwner} IS NOT NULL AND t.${tOwner} <> ''
           AND t.${tReceivedAt} >= ? AND t.${tReceivedAt} < ?
-      ) ti
-      JOIN ${U} u ON u.${uId} = ti.person_id
+      ) ti ON ti.person_id = u.${uId}
       LEFT JOIN (
         ${usedSql}
-      ) us ON us.task_id = ti.task_id AND us.person_id = ti.person_id
+      ) us ON us.task_id = ti.task_id AND us.person_id = u.${uId}
       WHERE 1=1
     `;
 
+    // placeholders order:
+    // 1-2: received task filter
+    // 3-4: used hours month filter (if enabled)
     const args: Array<string> = [month.start, month.end];
+    if (usedSql.includes('WHERE th.')) args.push(month.start, month.end);
     if (departmentId && uDeptId) {
       sql += ` AND u.${uDeptId} = ?`;
       args.push(departmentId);
@@ -109,6 +131,15 @@ export async function GET(req: Request) {
 
     const rows = await prisma.$queryRawUnsafe<any[]>(sql, ...args);
 
+    // normalize BigInt aggregates for JSON safety
+    const people = rows.map((r) => ({
+      ...r,
+      task_count: Number(r.task_count || 0),
+      received_total_hours: Number(r.received_total_hours || 0),
+      used_hours: Number(r.used_hours || 0),
+      remaining_hours: Number(r.remaining_hours || 0)
+    }));
+
     // keep unused vars referenced (avoid tree-shaking confusion) — also confirms table compiles
     void P;
     void tProjectId;
@@ -118,7 +149,7 @@ export async function GET(req: Request) {
       date_range: { from: month.start, to_exclusive: month.end },
       received_at_column: { table: m.tables.task, column: receivedAtCol },
       filters: { departmentId: departmentId || null, personId: personId || null },
-      people: rows
+      people
     });
   } catch (err: any) {
     const message = err?.message ? String(err.message) : 'unknown error';

@@ -33,6 +33,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ personId: strin
     const P = sqlId(m.tables.project);
     const T = sqlId(m.tables.task);
     const TR = sqlId(m.tables.time);
+    const TH = m.tables.timeReport ? sqlId(m.tables.timeReport) : null;
 
     const pId = sqlId(m.project.id);
     const pCode = m.project.code ? sqlId(m.project.code) : null;
@@ -49,6 +50,9 @@ export async function GET(req: Request, ctx: { params: Promise<{ personId: strin
     const trTaskId = sqlId(m.time.taskId);
     const trUserId = sqlId(m.time.userId);
     const trHours = sqlId(m.time.hours);
+    const trTimeReportId = m.time.timeReportId ? sqlId(m.time.timeReportId) : null;
+    const thId = m.timeReport?.id ? sqlId(m.timeReport.id) : null;
+    const thWorkDate = m.timeReport?.workDate ? sqlId(m.timeReport.workDate) : null;
 
     if (!tOwner) {
       return Response.json(
@@ -59,7 +63,19 @@ export async function GET(req: Request, ctx: { params: Promise<{ personId: strin
 
     const plannedExpr = tPlanned ? `COALESCE(t.${tPlanned}, 0)` : '0';
 
-    const usedSql = `
+    const usedSql =
+      TH && trTimeReportId && thId && thWorkDate
+        ? `
+      SELECT
+        tr.${trTaskId} AS task_id,
+        tr.${trUserId} AS person_id,
+        COALESCE(SUM(tr.${trHours}), 0) AS used_hours
+      FROM ${TR} tr
+      LEFT JOIN ${TH} th ON th.${thId} = tr.${trTimeReportId}
+      WHERE th.${thWorkDate} >= ? AND th.${thWorkDate} < ?
+      GROUP BY tr.${trTaskId}, tr.${trUserId}
+    `
+        : `
       SELECT
         tr.${trTaskId} AS task_id,
         tr.${trUserId} AS person_id,
@@ -99,14 +115,26 @@ export async function GET(req: Request, ctx: { params: Promise<{ personId: strin
       ORDER BY ti.received_at DESC, ti.task_id DESC
     `;
 
-    const tasks = await prisma.$queryRawUnsafe<any[]>(sql, personId, month.start, month.end, personId);
+    const args: any[] = [personId, month.start, month.end];
+    if (usedSql.includes('WHERE th.')) args.push(month.start, month.end);
+    args.push(personId);
+
+    const tasks = await prisma.$queryRawUnsafe<any[]>(sql, ...args);
+
+    // normalize numeric fields for JSON safety (SUM/expressions may come back as BigInt/Decimal)
+    const normalized = tasks.map((t) => ({
+      ...t,
+      planned_hours: Number(t.planned_hours || 0),
+      used_hours: Number(t.used_hours || 0),
+      remaining_hours: Number(t.remaining_hours || 0)
+    }));
 
     return Response.json({
       personId,
       month: `${String(month.yyyy)}-${String(month.mm).padStart(2, '0')}`,
       date_range: { from: month.start, to_exclusive: month.end },
       received_at_column: { table: m.tables.task, column: receivedAtCol },
-      tasks
+      tasks: normalized
     });
   } catch (err: any) {
     const message = err?.message ? String(err.message) : 'unknown error';
