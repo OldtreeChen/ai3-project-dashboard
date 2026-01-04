@@ -52,7 +52,7 @@ export const AI_DEPT_WHITELISTS: Record<'dept1' | 'dept2', DeptWhitelist> = {
       '陳治瑋',
       '張世暉',
       '黃宇晨',
-      '李冠嘉',
+      '李冠熹',
       '馮雅',
       '李若菲',
       '葉修文',
