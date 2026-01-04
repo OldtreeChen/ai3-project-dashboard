@@ -45,7 +45,8 @@ export async function GET() {
       LEFT JOIN ${U} u ON u.${uId} = p.${pOwner}
       LEFT JOIN ${T} t ON t.${tProjectId} = p.${pId}
       WHERE p.${pName} NOT LIKE '%新人%'
-        ${pStatus ? `AND p.${pStatus} NOT IN ('Finished','FinishAuditing','Discarded','Cancel')` : ''}
+        AND p.${pName} LIKE '【AI】%'
+        ${pStatus ? `AND p.${pStatus} NOT IN ('New', 'Finished','FinishAuditing','Discarded','Cancel')` : ''}
       GROUP BY p.${pOwner}
       ORDER BY remaining_hours DESC, planned_hours DESC, owner_name ASC
     `;

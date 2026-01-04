@@ -59,7 +59,7 @@ export async function GET(req: Request) {
 
   // 排除成功關閉（依 dictionary 值，不用中文模糊）
   if (pStatus) {
-    where += ` AND p.${pStatus} NOT IN ('Finished','FinishAuditing','Discarded','Cancel')`;
+    where += ` AND p.${pStatus} NOT IN ('New', 'Finished','FinishAuditing','Discarded','Cancel')`;
   }
 
   if (departmentId && pDeptId) {

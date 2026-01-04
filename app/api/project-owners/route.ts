@@ -44,7 +44,7 @@ export async function GET(req: Request) {
   args.push('【AI】%');
 
   // 排除成功關閉
-  if (pStatus) where += ` AND p.${pStatus} NOT IN ('Finished','FinishAuditing','Discarded','Cancel')`;
+  if (pStatus) where += ` AND p.${pStatus} NOT IN ('New', 'Finished','FinishAuditing','Discarded','Cancel')`;
 
   if (departmentId && pDeptId) {
     where += ` AND p.${pDeptId} = ?`;
