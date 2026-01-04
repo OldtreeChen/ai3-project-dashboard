@@ -189,6 +189,11 @@ body{
   font-size: 22px;
   font-weight: 800;
 }
+.card__value .badge{
+  font-size: inherit;
+  font-weight: inherit;
+  padding: 4px 12px;
+}
 .card__hint{
   margin-top: 8px;
   font-size: 12px;
