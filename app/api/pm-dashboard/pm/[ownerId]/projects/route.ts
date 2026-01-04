@@ -38,7 +38,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ ownerId: strin
   const usedExpr = tHours ? `COALESCE(SUM(t.${tHours}), 0)` : '0';
   const plannedAggExpr = pPlanned ? `MAX(COALESCE(p.${pPlanned}, 0))` : '0';
   const executingFilter = pStatus
-    ? `AND p.${pStatus} IN ('Executing','ExecuteAuditing','ExecuteBack','Overdue','OverdueUpgrade')`
+    ? `AND p.${pStatus} IN ('New','Executing','ExecuteAuditing','ExecuteBack','Overdue','OverdueUpgrade')`
     : '';
   const projectDeptFilter =
     D && dId && dName && pDeptId
