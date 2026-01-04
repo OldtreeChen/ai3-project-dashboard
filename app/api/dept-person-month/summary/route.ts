@@ -115,9 +115,21 @@ export async function GET(req: Request) {
     // 3-4: used hours month filter (if enabled)
     const args: Array<string> = [month.start, month.end];
     if (usedSql.includes('WHERE th.')) args.push(month.start, month.end);
-    if (departmentId && uDeptId) {
-      sql += ` AND u.${uDeptId} = ?`;
-      args.push(departmentId);
+    // 人員彙總：只列出 AI專案一部 / AI專案二部 的人員
+    // - 若有指定 departmentId：直接用 id 過濾
+    // - 若沒指定：預設限制在 (AI專案一部/二部) 的部門 ID 集合
+    if (uDeptId) {
+      if (departmentId) {
+        sql += ` AND u.${uDeptId} = ?`;
+        args.push(departmentId);
+      } else if (m.tables.department && m.department?.id && m.department?.name) {
+        // (we already have D/dId/dName above, but keep logic self-contained)
+        const D2 = sqlId(m.tables.department);
+        const dId2 = sqlId(m.department.id);
+        const dName2 = sqlId(m.department.name);
+        sql += ` AND u.${uDeptId} IN (SELECT d.${dId2} FROM ${D2} d WHERE d.${dName2} LIKE ? OR d.${dName2} LIKE ?)`;
+        args.push('%AI專案一部%', '%AI專案二部%');
+      }
     }
     if (personId) {
       sql += ` AND u.${uId} = ?`;
