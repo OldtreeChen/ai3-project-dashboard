@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { getEcpMapping, sqlId } from '@/lib/ecpSchema';
+import { getTaskPlannedEndAtColumn } from '@/lib/taskPlannedEndAt';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,7 +19,8 @@ export async function GET(_req: Request, ctx: { params: Promise<{ projectId: str
   const tStatus = m.task.status ? sqlId(m.task.status) : null;
   const tPlanned = m.task.plannedHours ? sqlId(m.task.plannedHours) : null;
   const tHours = m.task.actualHours ? sqlId(m.task.actualHours) : null;
-  const tPlanEnd = m.task.plannedEndAt ? sqlId(m.task.plannedEndAt) : null;
+  const planEndCol = await getTaskPlannedEndAtColumn();
+  const tPlanEnd = planEndCol ? sqlId(planEndCol) : (m.task.plannedEndAt ? sqlId(m.task.plannedEndAt) : null);
   const tCompleted = m.task.completedAt ? sqlId(m.task.completedAt) : null;
   const tExecutor = m.task.executorUserId ? sqlId(m.task.executorUserId) : (m.task.ownerUserId ? sqlId(m.task.ownerUserId) : null);
 
