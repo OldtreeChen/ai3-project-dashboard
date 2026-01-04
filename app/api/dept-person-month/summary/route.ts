@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { getEcpMapping, sqlId } from '@/lib/ecpSchema';
 import { getTaskReceivedAtColumn } from '@/lib/taskReceivedAt';
+import { getUserActiveFilter } from '@/lib/userActive';
 import { parseIdParam } from '../../_utils';
 
 export const dynamic = 'force-dynamic';
@@ -131,6 +132,13 @@ export async function GET(req: Request) {
         args.push('%AI專案一部%', '%AI專案二部%');
       }
     }
+
+    // exclude system/service users + disabled/deleted users
+    sql += ` AND u.${uName} NOT LIKE ? AND u.${uName} NOT LIKE ?`;
+    args.push('%MidECP-User%', '%service_user%');
+    const active = await getUserActiveFilter(m.tables.user, 'u');
+    sql += active.where;
+
     if (personId) {
       sql += ` AND u.${uId} = ?`;
       args.push(personId);
@@ -144,13 +152,35 @@ export async function GET(req: Request) {
     const rows = await prisma.$queryRawUnsafe<any[]>(sql, ...args);
 
     // normalize BigInt aggregates for JSON safety
-    const people = rows.map((r) => ({
+    const normalized = rows.map((r) => ({
       ...r,
       task_count: Number(r.task_count || 0),
       received_total_hours: Number(r.received_total_hours || 0),
       used_hours: Number(r.used_hours || 0),
       remaining_hours: Number(r.remaining_hours || 0)
     }));
+
+    // de-dupe by normalized display name (avoid listing same person twice)
+    const seen = new Set<string>();
+    const people: any[] = [];
+    for (const r of normalized) {
+      const name = String(r.display_name ?? '').trim();
+      if (!name) continue;
+      const key = name.replace(/\s*\([^)]*\)\s*$/, '').trim().toLowerCase();
+      if (!seen.has(key)) {
+        seen.add(key);
+        people.push(r);
+        continue;
+      }
+      // if duplicate exists, keep the row with more activity (avoid losing data)
+      const idx = people.findIndex((x) => String(x.display_name ?? '').trim().replace(/\s*\([^)]*\)\s*$/, '').trim().toLowerCase() === key);
+      if (idx >= 0) {
+        const cur = people[idx];
+        const curScore = Number(cur.used_hours || 0) + Number(cur.received_total_hours || 0) + Number(cur.task_count || 0);
+        const nextScore = Number(r.used_hours || 0) + Number(r.received_total_hours || 0) + Number(r.task_count || 0);
+        if (nextScore > curScore) people[idx] = r;
+      }
+    }
 
     // keep unused vars referenced (avoid tree-shaking confusion) — also confirms table compiles
     void P;
