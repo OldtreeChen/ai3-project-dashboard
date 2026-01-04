@@ -5,6 +5,7 @@ import { getUserActiveFilter } from '@/lib/userActive';
 import { getTaskPlannedHoursColumn } from '@/lib/taskPlannedHours';
 import { getTaskPlannedEndAtColumn } from '@/lib/taskPlannedEndAt';
 import { getTaskPlannedStartAtColumn } from '@/lib/taskPlannedStartAt';
+import { buildWhitelistWhere, getAiDeptIds } from '@/lib/aiPeopleWhitelist';
 import { parseIdParam } from '../../_utils';
 
 export const dynamic = 'force-dynamic';
@@ -63,6 +64,7 @@ export async function GET(req: Request) {
 
     const uId = sqlId(m.user.id);
     const uName = sqlId(m.user.displayName);
+    const uAccount = m.user.account ? sqlId(m.user.account) : null;
     const uDeptId = m.user.departmentId ? sqlId(m.user.departmentId) : null;
 
     if (!tAssignee) {
@@ -167,6 +169,19 @@ export async function GET(req: Request) {
     args.push('%MidECP-User%', '%service_user%');
     const active = await getUserActiveFilter(m.tables.user, 'u');
     sql += active.where;
+
+    // apply whitelist (AI專案一部/二部) for dept/person tasks list
+    const { dept1Id, dept2Id } = await getAiDeptIds();
+    const wl = buildWhitelistWhere({
+      uDeptId: uDeptId ? String(uDeptId) : null,
+      uName: String(uName),
+      uAccount: uAccount ? String(uAccount) : null,
+      departmentId: departmentId || null,
+      dept1Id,
+      dept2Id
+    });
+    sql += wl.where;
+    args.push(...wl.args);
 
     if (personId) {
       sql += ` AND u.${uId} = ?`;
