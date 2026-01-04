@@ -51,6 +51,7 @@ export async function GET(req: Request) {
     const tAssigneeRaw = m.task.executorUserId || m.task.ownerUserId;
     const tAssignee = tAssigneeRaw ? sqlId(tAssigneeRaw) : null;
     const tPlanned = plannedHoursCol ? sqlId(plannedHoursCol) : (m.task.plannedHours ? sqlId(m.task.plannedHours) : null);
+    const tActual = m.task.actualHours ? sqlId(m.task.actualHours) : null;
     const tReceivedAt = sqlId(receivedAtCol);
     const tPlanStart = plannedStartCol ? sqlId(plannedStartCol) : null;
     const tPlanEnd = plannedEndCol ? sqlId(plannedEndCol) : null;
@@ -77,27 +78,8 @@ export async function GET(req: Request) {
 
     const plannedExpr = tPlanned ? `COALESCE(t.${tPlanned}, 0)` : '0';
 
-    // used hours should be scoped to the selected month (capacity is monthly)
-    const usedSql =
-      TH && trTimeReportId && thId && thWorkDate
-        ? `
-      SELECT
-        tr.${trTaskId} AS task_id,
-        tr.${trUserId} AS person_id,
-        COALESCE(SUM(tr.${trHours}), 0) AS used_hours
-      FROM ${TR} tr
-      LEFT JOIN ${TH} th ON th.${thId} = tr.${trTimeReportId}
-      WHERE th.${thWorkDate} >= ? AND th.${thWorkDate} < ?
-      GROUP BY tr.${trTaskId}, tr.${trUserId}
-    `
-        : `
-      SELECT
-        tr.${trTaskId} AS task_id,
-        tr.${trUserId} AS person_id,
-        COALESCE(SUM(tr.${trHours}), 0) AS used_hours
-      FROM ${TR} tr
-      GROUP BY tr.${trTaskId}, tr.${trUserId}
-    `;
+    // Note: for dept/month dashboard, "已執行" should match ECP task list "實際時數"
+    // (task-level actual hours), not time report details; otherwise it often shows 0.
 
     // Month allocation rule:
     // - task belongs to month if [start,end] overlaps [month.start, month.end)
@@ -113,8 +95,8 @@ export async function GET(req: Request) {
         ${uDeptId ? `,u.${uDeptId} AS department_id` : `,NULL AS department_id`},
         COUNT(ti.task_id) AS task_count,
         COALESCE(SUM(COALESCE(ti.planned_hours, 0)), 0) AS received_total_hours,
-        COALESCE(SUM(COALESCE(us.used_hours, 0)), 0) AS used_hours,
-        COALESCE(SUM(COALESCE(ti.planned_hours, 0)), 0) - COALESCE(SUM(COALESCE(us.used_hours, 0)), 0) AS remaining_hours
+        COALESCE(SUM(COALESCE(ti.actual_hours, 0)), 0) AS used_hours,
+        COALESCE(SUM(COALESCE(ti.planned_hours, 0)), 0) - COALESCE(SUM(COALESCE(ti.actual_hours, 0)), 0) AS remaining_hours
       FROM ${U} u
       LEFT JOIN (
         SELECT
@@ -131,24 +113,32 @@ export async function GET(req: Request) {
             ) /
             GREATEST(DATEDIFF(DATE(${endExpr}), DATE(${startExpr})) + 1, 1)
           ) AS planned_hours
+          ,
+          (
+            ${tActual ? `COALESCE(t.${tActual}, 0)` : '0'} *
+            GREATEST(
+              DATEDIFF(
+                LEAST(DATE(${endExpr}), DATE_SUB(DATE(?), INTERVAL 1 DAY)),
+                GREATEST(DATE(${startExpr}), DATE(?))
+              ) + 1,
+              0
+            ) /
+            GREATEST(DATEDIFF(DATE(${endExpr}), DATE(${startExpr})) + 1, 1)
+          ) AS actual_hours
         FROM ${T} t
         WHERE t.${tAssignee} IS NOT NULL AND t.${tAssignee} <> ''
           ${tStatus ? `AND (t.${tStatus} IS NULL OR t.${tStatus} NOT IN ('Finished','Discarded','Cancel'))` : ''}
           AND DATE(${startExpr}) < DATE(?)
           AND DATE(${endExpr}) >= DATE(?)
       ) ti ON ti.person_id = u.${uId}
-      LEFT JOIN (
-        ${usedSql}
-      ) us ON us.task_id = ti.task_id AND us.person_id = u.${uId}
       WHERE 1=1
     `;
 
     // placeholders order:
-    // 1-2: month end/start for overlap calc (DATE_SUB needs end)
-    // 3-4: month end/start for overlap WHERE
-    // 5-6: used hours month filter (if enabled)
-    const args: Array<string> = [month.end, month.start, month.end, month.start];
-    if (usedSql.includes('WHERE th.')) args.push(month.start, month.end);
+    // 1-2: planned overlap calc
+    // 3-4: actual overlap calc
+    // 5-6: overlap WHERE
+    const args: Array<string> = [month.end, month.start, month.end, month.start, month.end, month.start];
     // exclude system/service users + disabled/deleted users
     sql += ` AND u.${uName} NOT LIKE ? AND u.${uName} NOT LIKE ?`;
     args.push('%MidECP-User%', '%service_user%');
@@ -221,6 +211,7 @@ export async function GET(req: Request) {
       planned_hours_column: { table: m.tables.task, column: plannedHoursCol },
       planned_start_column: { table: m.tables.task, column: plannedStartCol },
       planned_end_column: { table: m.tables.task, column: plannedEndCol },
+      actual_hours_column: { table: m.tables.task, column: m.task.actualHours || null },
       allocation: { method: 'overlap_days / total_days', unit: 'calendar_days', note: '接收總時數=該月均攤後預估' },
       filters: { departmentId: departmentId || null, personId: personId || null },
       people

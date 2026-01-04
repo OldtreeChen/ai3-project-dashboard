@@ -52,6 +52,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ personId: strin
     const tAssigneeRaw = m.task.executorUserId || m.task.ownerUserId;
     const tAssignee = tAssigneeRaw ? sqlId(tAssigneeRaw) : null;
     const tPlanned = plannedHoursCol ? sqlId(plannedHoursCol) : (m.task.plannedHours ? sqlId(m.task.plannedHours) : null);
+    const tActual = m.task.actualHours ? sqlId(m.task.actualHours) : null;
     const tStatus = m.task.status ? sqlId(m.task.status) : null;
     const tReceivedAt = sqlId(receivedAtCol);
     const tPlannedEndAt = plannedEndCol ? sqlId(plannedEndCol) : null;
@@ -78,27 +79,6 @@ export async function GET(req: Request, ctx: { params: Promise<{ personId: strin
     const startExpr = tPlannedStartAt ? `COALESCE(t.${tPlannedStartAt}, t.${tReceivedAt})` : `t.${tReceivedAt}`;
     const endExpr = tPlannedEndAt ? `COALESCE(t.${tPlannedEndAt}, t.${tReceivedAt})` : `t.${tReceivedAt}`;
 
-    const usedSql =
-      TH && trTimeReportId && thId && thWorkDate
-        ? `
-      SELECT
-        tr.${trTaskId} AS task_id,
-        tr.${trUserId} AS person_id,
-        COALESCE(SUM(tr.${trHours}), 0) AS used_hours
-      FROM ${TR} tr
-      LEFT JOIN ${TH} th ON th.${thId} = tr.${trTimeReportId}
-      WHERE th.${thWorkDate} >= ? AND th.${thWorkDate} < ?
-      GROUP BY tr.${trTaskId}, tr.${trUserId}
-    `
-        : `
-      SELECT
-        tr.${trTaskId} AS task_id,
-        tr.${trUserId} AS person_id,
-        COALESCE(SUM(tr.${trHours}), 0) AS used_hours
-      FROM ${TR} tr
-      GROUP BY tr.${trTaskId}, tr.${trUserId}
-    `;
-
     const sql = `
       SELECT
         ti.task_id,
@@ -108,8 +88,8 @@ export async function GET(req: Request, ctx: { params: Promise<{ personId: strin
         ti.planned_hours,
         ti.planned_end_at,
         ti.completed_at,
-        COALESCE(us.used_hours, 0) AS used_hours,
-        (ti.planned_hours - COALESCE(us.used_hours, 0)) AS remaining_hours,
+        ti.used_hours,
+        (ti.planned_hours - ti.used_hours) AS remaining_hours,
         ti.project_id,
         ${pCode ? `p.${pCode} AS project_code,` : `NULL AS project_code,`}
         p.${pName} AS project_name
@@ -133,15 +113,24 @@ export async function GET(req: Request, ctx: { params: Promise<{ personId: strin
             ) /
             GREATEST(DATEDIFF(DATE(${endExpr}), DATE(${startExpr})) + 1, 1)
           ) AS planned_hours
+          ,
+          (
+            ${tActual ? `COALESCE(t.${tActual}, 0)` : '0'} *
+            GREATEST(
+              DATEDIFF(
+                LEAST(DATE(${endExpr}), DATE_SUB(DATE(?), INTERVAL 1 DAY)),
+                GREATEST(DATE(${startExpr}), DATE(?))
+              ) + 1,
+              0
+            ) /
+            GREATEST(DATEDIFF(DATE(${endExpr}), DATE(${startExpr})) + 1, 1)
+          ) AS used_hours
         FROM ${T} t
         WHERE t.${tAssignee} = ?
           ${tStatus ? `AND (t.${tStatus} IS NULL OR t.${tStatus} NOT IN ('Finished','Discarded','Cancel'))` : ''}
           AND DATE(${startExpr}) < DATE(?)
           AND DATE(${endExpr}) >= DATE(?)
       ) ti
-      LEFT JOIN (
-        ${usedSql}
-      ) us ON us.task_id = ti.task_id AND us.person_id = ?
       LEFT JOIN ${P} p ON p.${pId} = ti.project_id
       ORDER BY ti.received_at DESC, ti.task_id DESC
     `;
@@ -152,9 +141,12 @@ export async function GET(req: Request, ctx: { params: Promise<{ personId: strin
     // 4-5: month end/start for overlap WHERE
     // 6-7: used hours month filter (if enabled)
     // last: personId for join
-    const args: any[] = [month.end, month.start, personId, month.end, month.start];
-    if (usedSql.includes('WHERE th.')) args.push(month.start, month.end);
-    args.push(personId);
+    // placeholders:
+    // 1-2: planned overlap calc
+    // 3-4: actual overlap calc
+    // 5: personId
+    // 6-7: overlap WHERE
+    const args: any[] = [month.end, month.start, month.end, month.start, personId, month.end, month.start];
 
     const tasks = await prisma.$queryRawUnsafe<any[]>(sql, ...args);
 
