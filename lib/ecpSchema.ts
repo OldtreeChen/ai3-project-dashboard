@@ -53,6 +53,7 @@ export type EcpMapping = {
     plannedHours?: string;
     actualHours?: string;
     status?: string;
+    plannedStartAt?: string;
     plannedEndAt?: string;
     completedAt?: string;
     receivedAt?: string;
@@ -263,6 +264,7 @@ export async function getEcpMapping(): Promise<EcpMapping> {
         plannedHours: pick(tCols, ['FPlanHours', 'FPlannedHours', 'planned_hours', 'plannedHours', 'planHours', 'estimateHours']),
         actualHours: pick(tCols, ['FHours', 'actual_hours', 'actualHours', 'hours']),
         status: pick(tCols, ['FStatus', 'status', 'taskStatus', 'task_status', 'state']),
+        plannedStartAt: pick(tCols, ['FPlanStartDate', 'FPredictStartDate', 'FPredictStartTime', 'FStandardStartTime', 'plannedStartAt', 'planned_start_at', 'planStartDate', 'plan_start_date', 'FStartDate', 'FStartTime']),
         plannedEndAt: pick(tCols, ['FPlanEndDate', 'FPredictEndDate', 'plannedEndAt', 'planned_end_at', 'planEndDate', 'plan_end_date']),
         completedAt: pick(tCols, ['FCompletedDate', 'FTaskCloseDate', 'completedAt', 'completed_at', 'completedDate', 'completed_date']),
         receivedAt: pick(tCols, ['FFirstCommitmentDate', 'FFirstCommitmentTime', 'receivedAt', 'received_at', 'firstCommitmentDate', 'createDate', 'created_at'])
@@ -333,6 +335,7 @@ export async function getEcpMapping(): Promise<EcpMapping> {
     mapping.task.plannedHours = keep(tSet, mapping.task.plannedHours);
     mapping.task.actualHours = keep(tSet, mapping.task.actualHours);
     mapping.task.status = keep(tSet, mapping.task.status);
+    mapping.task.plannedStartAt = keep(tSet, mapping.task.plannedStartAt);
     mapping.task.plannedEndAt = keep(tSet, mapping.task.plannedEndAt);
     mapping.task.completedAt = keep(tSet, mapping.task.completedAt);
     mapping.task.receivedAt = keep(tSet, mapping.task.receivedAt);
@@ -417,6 +420,7 @@ export async function getEcpMapping(): Promise<EcpMapping> {
     m2.task.plannedHours = keep(tSet, m2.task.plannedHours);
     m2.task.actualHours = keep(tSet, m2.task.actualHours);
     m2.task.status = keep(tSet, m2.task.status);
+    m2.task.plannedStartAt = keep(tSet, m2.task.plannedStartAt);
     m2.task.plannedEndAt = keep(tSet, m2.task.plannedEndAt);
     m2.task.completedAt = keep(tSet, m2.task.completedAt);
     m2.task.receivedAt = keep(tSet, m2.task.receivedAt);

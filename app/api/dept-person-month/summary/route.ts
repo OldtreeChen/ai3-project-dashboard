@@ -218,6 +218,10 @@ export async function GET(req: Request) {
       month: `${String(month.yyyy)}-${String(month.mm).padStart(2, '0')}`,
       date_range: { from: month.start, to_exclusive: month.end },
       received_at_column: { table: m.tables.task, column: receivedAtCol },
+      planned_hours_column: { table: m.tables.task, column: plannedHoursCol },
+      planned_start_column: { table: m.tables.task, column: plannedStartCol },
+      planned_end_column: { table: m.tables.task, column: plannedEndCol },
+      allocation: { method: 'overlap_days / total_days', unit: 'calendar_days', note: '接收總時數=該月均攤後預估' },
       filters: { departmentId: departmentId || null, personId: personId || null },
       people
     });

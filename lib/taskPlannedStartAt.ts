@@ -3,9 +3,12 @@ import { getEcpColumns, getEcpMapping, sqlId } from '@/lib/ecpSchema';
 
 const globalCache = globalThis as unknown as {
   __taskPlannedStartAtCol?: string | null;
+  __taskPlannedStartAtColV?: number;
 };
 
 type ColInfo = { column_name: string; data_type?: string };
+
+const CACHE_VERSION = 2;
 
 function isDateLikeType(t?: string) {
   const s = String(t || '').toLowerCase();
@@ -30,7 +33,9 @@ async function countNonNull(table: string, col: string) {
  * - 優先挑選有最多非空值的候選欄位
  */
 export async function getTaskPlannedStartAtColumn(): Promise<string | null> {
-  if (globalCache.__taskPlannedStartAtCol !== undefined) return globalCache.__taskPlannedStartAtCol;
+  if (globalCache.__taskPlannedStartAtColV === CACHE_VERSION && globalCache.__taskPlannedStartAtCol !== undefined) {
+    return globalCache.__taskPlannedStartAtCol;
+  }
 
   const m = await getEcpMapping();
   const colsInfo = await getEcpColumns();
@@ -40,6 +45,7 @@ export async function getTaskPlannedStartAtColumn(): Promise<string | null> {
 
   // 常見候選：PlanStartDate / PredictStartTime / StandardStartTime / StartDate
   const candidates = [
+    exists(m.task.plannedStartAt),
     exists('FPredictStartTime'),
     exists('FStandardStartTime'),
     exists('FPredictStartDate'),
@@ -49,11 +55,23 @@ export async function getTaskPlannedStartAtColumn(): Promise<string | null> {
     exists('FStartTime')
   ].filter(Boolean) as string[];
 
-  const dateCandidates = candidates.filter((c) => isDateLikeType(byName.get(c)?.data_type));
-  const uniq = Array.from(new Set(dateCandidates));
+  let uniq = Array.from(new Set(candidates.filter((c) => isDateLikeType(byName.get(c)?.data_type))));
+
+  // Fallback: pick any date-like column whose name includes "start" / "begin"
+  if (!uniq.length) {
+    const fallback = cols
+      .filter((c) => isDateLikeType(c.data_type))
+      .map((c) => c.column_name)
+      .filter((n) => {
+        const s = String(n).toLowerCase();
+        return s.includes('start') || s.includes('begin');
+      });
+    uniq = Array.from(new Set(fallback));
+  }
 
   if (!uniq.length) {
     globalCache.__taskPlannedStartAtCol = null;
+    globalCache.__taskPlannedStartAtColV = CACHE_VERSION;
     return null;
   }
 
@@ -64,6 +82,7 @@ export async function getTaskPlannedStartAtColumn(): Promise<string | null> {
   }
 
   globalCache.__taskPlannedStartAtCol = best?.col || uniq[0] || null;
+  globalCache.__taskPlannedStartAtColV = CACHE_VERSION;
   return globalCache.__taskPlannedStartAtCol;
 }
 
