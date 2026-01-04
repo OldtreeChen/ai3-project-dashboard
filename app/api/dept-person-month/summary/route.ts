@@ -54,6 +54,7 @@ export async function GET(req: Request) {
     const tReceivedAt = sqlId(receivedAtCol);
     const tPlanStart = plannedStartCol ? sqlId(plannedStartCol) : null;
     const tPlanEnd = plannedEndCol ? sqlId(plannedEndCol) : null;
+    const tStatus = m.task.status ? sqlId(m.task.status) : null;
 
     const trTaskId = sqlId(m.time.taskId);
     const trUserId = sqlId(m.time.userId);
@@ -132,6 +133,7 @@ export async function GET(req: Request) {
           ) AS planned_hours
         FROM ${T} t
         WHERE t.${tAssignee} IS NOT NULL AND t.${tAssignee} <> ''
+          ${tStatus ? `AND (t.${tStatus} IS NULL OR t.${tStatus} NOT IN ('Finished','Discarded','Cancel'))` : ''}
           AND DATE(${startExpr}) < DATE(?)
           AND DATE(${endExpr}) >= DATE(?)
       ) ti ON ti.person_id = u.${uId}

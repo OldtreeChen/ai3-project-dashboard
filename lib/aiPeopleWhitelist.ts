@@ -82,6 +82,7 @@ export const AI_DEPT_WHITELISTS: Record<'dept1' | 'dept2', DeptWhitelist> = {
     ],
     names: [
       '王社元',
+      '王祉元',
       '吳詩瑀',
       '李吳孟修',
       '王子豪',
