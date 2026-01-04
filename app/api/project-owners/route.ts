@@ -45,7 +45,7 @@ export async function GET(req: Request) {
 
   // 排除成功關閉
   // 只排除「成功關閉」的狀態；新增/已分配要跟執行中一起列出
-  if (pStatus) where += ` AND p.${pStatus} NOT IN ('Finished','FinishAuditing','Discarded','Cancel')`;
+  if (pStatus) where += ` AND p.${pStatus} NOT IN ('Finished','FinishAuditing')`;
 
   if (departmentId && pDeptId) {
     where += ` AND p.${pDeptId} = ?`;
