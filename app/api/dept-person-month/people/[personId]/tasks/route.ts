@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { getEcpMapping, sqlId } from '@/lib/ecpSchema';
 import { getTaskReceivedAtColumn } from '@/lib/taskReceivedAt';
+import { getTaskPlannedEndAtColumn } from '@/lib/taskPlannedEndAt';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,6 +30,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ personId: strin
 
     const m = await getEcpMapping();
     const receivedAtCol = await getTaskReceivedAtColumn();
+    const plannedEndCol = await getTaskPlannedEndAtColumn();
 
     const P = sqlId(m.tables.project);
     const T = sqlId(m.tables.task);
@@ -46,6 +48,8 @@ export async function GET(req: Request, ctx: { params: Promise<{ personId: strin
     const tPlanned = m.task.plannedHours ? sqlId(m.task.plannedHours) : null;
     const tStatus = m.task.status ? sqlId(m.task.status) : null;
     const tReceivedAt = sqlId(receivedAtCol);
+    const tPlannedEndAt = plannedEndCol ? sqlId(plannedEndCol) : null;
+    const tCompletedAt = m.task.completedAt ? sqlId(m.task.completedAt) : null;
 
     const trTaskId = sqlId(m.time.taskId);
     const trUserId = sqlId(m.time.userId);
@@ -91,6 +95,8 @@ export async function GET(req: Request, ctx: { params: Promise<{ personId: strin
         ti.task_status,
         ti.received_at,
         ti.planned_hours,
+        ti.planned_end_at,
+        ti.completed_at,
         COALESCE(us.used_hours, 0) AS used_hours,
         (ti.planned_hours - COALESCE(us.used_hours, 0)) AS remaining_hours,
         ti.project_id,
@@ -103,6 +109,8 @@ export async function GET(req: Request, ctx: { params: Promise<{ personId: strin
           t.${tProjectId} AS project_id,
           ${tStatus ? `t.${tStatus} AS task_status,` : `NULL AS task_status,`}
           t.${tReceivedAt} AS received_at,
+          ${tPlannedEndAt ? `t.${tPlannedEndAt} AS planned_end_at,` : `NULL AS planned_end_at,`}
+          ${tCompletedAt ? `t.${tCompletedAt} AS completed_at,` : `NULL AS completed_at,`}
           ${plannedExpr} AS planned_hours
         FROM ${T} t
         WHERE t.${tOwner} = ?

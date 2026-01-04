@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import TopMenu from '../_components/TopMenu';
+import { toZhStatus } from '@/lib/statusText';
 
 type DepartmentId = string | number;
 type PersonId = string | number;
@@ -23,6 +24,8 @@ type TaskRow = {
   task_name: string;
   task_status: string | null;
   received_at: string | null;
+  planned_end_at?: string | null;
+  completed_at?: string | null;
   planned_hours: number;
   used_hours: number;
   remaining_hours: number;
@@ -35,6 +38,13 @@ function fmtHours(v: unknown) {
   const n = Number(v ?? 0);
   if (!Number.isFinite(n)) return '--';
   return n.toFixed(n % 1 === 0 ? 0 : 1);
+}
+
+function fmtDateTime(v: unknown) {
+  const s = String(v ?? '').trim();
+  if (!s) return '--';
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.replace('T', ' ').slice(0, 19);
+  return s;
 }
 
 function toMonthValue(d = new Date()) {
@@ -272,35 +282,51 @@ export default function DeptPersonMonthDashboardClient() {
                 <table className="table task-table">
                   <thead>
                     <tr>
-                      <th>專案</th>
-                      <th>任務</th>
+                      <th>任務描述</th>
+                      <th>執行人</th>
                       <th>狀態</th>
-                      <th>接收日</th>
-                      <th className="num">預估</th>
-                      <th className="num">已執行</th>
-                      <th className="num">剩餘</th>
+                      <th className="num">預估時數</th>
+                      <th className="num">實際時數</th>
+                      <th className="num">剩餘時數</th>
+                      <th>預計結束時間</th>
+                      <th>實際完成時間</th>
                     </tr>
                   </thead>
                   <tbody>
                     {tasks.length ? (
                       tasks.map((t) => (
                         <tr key={String(t.task_id)}>
-                          <td title={t.project_name || ''}>
-                            {t.project_code ? `${t.project_code}｜${t.project_name || ''}` : t.project_name || <span className="muted">--</span>}
-                          </td>
-                          <td className="task-table__desc" title={t.task_name}>
+                          <td
+                            className="task-table__desc"
+                            title={`${t.project_code ? `${t.project_code}｜` : ''}${t.project_name || ''}｜${t.task_name}`}
+                          >
+                            {(t.project_code || t.project_name) ? (
+                              <span className="muted">
+                                {t.project_code ? `${t.project_code}｜` : ''}
+                                {t.project_name || ''}
+                                {'｜'}
+                              </span>
+                            ) : null}
                             {t.task_name}
                           </td>
-                          <td>{t.task_status || <span className="muted">--</span>}</td>
-                          <td>{t.received_at ? String(t.received_at).slice(0, 10) : <span className="muted">--</span>}</td>
+                          <td>{selectedPerson?.display_name || <span className="muted">--</span>}</td>
+                          <td>{toZhStatus(t.task_status)}</td>
                           <td className="num">{fmtHours(t.planned_hours)}</td>
                           <td className="num">{fmtHours(t.used_hours)}</td>
-                          <td className="num">{fmtHours(t.remaining_hours)}</td>
+                          <td className="num">
+                            {Number(t.remaining_hours || 0) >= 0 ? (
+                              <span className="badge badge--good">{fmtHours(t.remaining_hours)}h</span>
+                            ) : (
+                              <span className="badge badge--bad">超支 {fmtHours(Math.abs(Number(t.remaining_hours || 0)))}h</span>
+                            )}
+                          </td>
+                          <td>{fmtDateTime(t.planned_end_at)}</td>
+                          <td>{fmtDateTime(t.completed_at)}</td>
                         </tr>
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={7} className="muted">
+                        <td colSpan={8} className="muted">
                           尚無任務
                         </td>
                       </tr>

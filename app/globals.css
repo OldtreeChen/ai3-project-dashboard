@@ -184,7 +184,8 @@ body{
   padding: 18px;
 }
 .modal{
-  width: min(1100px, 96vw);
+  /* Wider, closer to main project detail table */
+  width: min(1400px, 98vw);
   max-height: 84vh;
   overflow: hidden;
   background: var(--panel);
