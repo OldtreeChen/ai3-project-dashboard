@@ -80,6 +80,12 @@ export default function DeptPersonMonthDashboardClient() {
     return hit ? { id: hit.person_id, display_name: hit.display_name } : null;
   }, [rows, selectedPersonId]);
 
+  const closeModal = () => {
+    setSelectedPersonId('');
+    setTasks([]);
+    setTasksError('');
+  };
+
   useEffect(() => {
     (async () => {
       try {
@@ -118,9 +124,7 @@ export default function DeptPersonMonthDashboardClient() {
   const toggleDetails = async (pid: string) => {
     const next = String(pid);
     if (selectedPersonId && String(selectedPersonId) === next) {
-      setSelectedPersonId('');
-      setTasks([]);
-      setTasksError('');
+      closeModal();
       return;
     }
     setSelectedPersonId(next);
@@ -137,6 +141,17 @@ export default function DeptPersonMonthDashboardClient() {
       setTasksLoading(false);
     }
   };
+
+  // Close modal with ESC
+  useEffect(() => {
+    if (!selectedPersonId) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeModal();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedPersonId]);
 
   return (
     <div className="app">
@@ -227,61 +242,76 @@ export default function DeptPersonMonthDashboardClient() {
               </table>
             </div>
 
-            {selectedPersonId ? (
-              <section className="panel" style={{ marginTop: 12 }}>
-                <div className="panel__header">
-                  <div className="panel__title">{selectedPerson?.display_name || selectedPersonId} 的任務明細</div>
-                  <div className="panel__meta">
-                    {tasksLoading ? '載入中…' : tasksError ? `錯誤：${tasksError}` : `${tasks.length} 筆`}
-                  </div>
-                </div>
-                <div className="panel__body">
-                  <div className="table-scroll">
-                    <table className="table task-table">
-                      <thead>
-                        <tr>
-                          <th>專案</th>
-                          <th>任務</th>
-                          <th>狀態</th>
-                          <th>接收日</th>
-                          <th className="num">預估</th>
-                          <th className="num">已執行</th>
-                          <th className="num">剩餘</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {tasks.length ? (
-                          tasks.map((t) => (
-                            <tr key={String(t.task_id)}>
-                              <td title={t.project_name || ''}>
-                                {t.project_code ? `${t.project_code}｜${t.project_name || ''}` : t.project_name || <span className="muted">--</span>}
-                              </td>
-                              <td className="task-table__desc" title={t.task_name}>
-                                {t.task_name}
-                              </td>
-                              <td>{t.task_status || <span className="muted">--</span>}</td>
-                              <td>{t.received_at ? String(t.received_at).slice(0, 10) : <span className="muted">--</span>}</td>
-                              <td className="num">{fmtHours(t.planned_hours)}</td>
-                              <td className="num">{fmtHours(t.used_hours)}</td>
-                              <td className="num">{fmtHours(t.remaining_hours)}</td>
-                            </tr>
-                          ))
-                        ) : (
-                          <tr>
-                            <td colSpan={7} className="muted">
-                              尚無任務
-                            </td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </section>
-            ) : null}
           </div>
         </section>
       </main>
+
+      {selectedPersonId ? (
+        <div
+          className="modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) closeModal();
+          }}
+        >
+          <div className="modal" onMouseDown={(e) => e.stopPropagation()}>
+            <div className="modal__header">
+              <div>
+                <div className="modal__title">{selectedPerson?.display_name || selectedPersonId} 的任務明細</div>
+                <div className="panel__meta" style={{ marginTop: 2 }}>
+                  {tasksLoading ? '載入中…' : tasksError ? `錯誤：${tasksError}` : `${tasks.length} 筆`}
+                </div>
+              </div>
+              <button className="modal__close" type="button" onClick={closeModal}>
+                關閉
+              </button>
+            </div>
+            <div className="modal__body">
+              <div className="table-scroll">
+                <table className="table task-table">
+                  <thead>
+                    <tr>
+                      <th>專案</th>
+                      <th>任務</th>
+                      <th>狀態</th>
+                      <th>接收日</th>
+                      <th className="num">預估</th>
+                      <th className="num">已執行</th>
+                      <th className="num">剩餘</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tasks.length ? (
+                      tasks.map((t) => (
+                        <tr key={String(t.task_id)}>
+                          <td title={t.project_name || ''}>
+                            {t.project_code ? `${t.project_code}｜${t.project_name || ''}` : t.project_name || <span className="muted">--</span>}
+                          </td>
+                          <td className="task-table__desc" title={t.task_name}>
+                            {t.task_name}
+                          </td>
+                          <td>{t.task_status || <span className="muted">--</span>}</td>
+                          <td>{t.received_at ? String(t.received_at).slice(0, 10) : <span className="muted">--</span>}</td>
+                          <td className="num">{fmtHours(t.planned_hours)}</td>
+                          <td className="num">{fmtHours(t.used_hours)}</td>
+                          <td className="num">{fmtHours(t.remaining_hours)}</td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={7} className="muted">
+                          尚無任務
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
