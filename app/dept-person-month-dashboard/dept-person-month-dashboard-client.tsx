@@ -104,6 +104,27 @@ export default function DeptPersonMonthDashboardClient() {
   const workdays = useMemo(() => getWorkdaysInMonth(month), [month]);
   const expectedHours = useMemo(() => workdays * 8 * 0.8, [workdays]);
 
+  const totals = useMemo(() => {
+    const peopleCount = rows.length;
+    const expected_total = expectedHours * peopleCount;
+    const received_total = rows.reduce((acc, r) => acc + Number(r.received_total_hours || 0), 0);
+    const used_total = rows.reduce((acc, r) => acc + Number(r.used_hours || 0), 0);
+    const remaining_total = rows.reduce((acc, r) => acc + Number(r.remaining_hours || 0), 0);
+    const gap_total = expected_total - received_total;
+    return { peopleCount, expected_total, received_total, gap_total, used_total, remaining_total };
+  }, [rows, expectedHours]);
+
+  const chartRows = useMemo(() => {
+    // Sort by received hours desc for readability
+    return [...rows].sort((a, b) => Number(b.received_total_hours || 0) - Number(a.received_total_hours || 0));
+  }, [rows]);
+
+  const chartScaleMax = useMemo(() => {
+    const maxReceived = chartRows.reduce((m, r) => Math.max(m, Number(r.received_total_hours || 0)), 0);
+    // Bar length should cover either expected or received (whichever is larger) for each person
+    return Math.max(expectedHours, maxReceived, 1);
+  }, [chartRows, expectedHours]);
+
   const selectedPerson = useMemo(() => {
     if (!selectedPersonId) return null;
     const hit = rows.find((r) => String(r.person_id) === String(selectedPersonId));
@@ -219,6 +240,48 @@ export default function DeptPersonMonthDashboardClient() {
           </span>
         </div>
 
+        <section className="panel" style={{ marginBottom: 12 }}>
+          <div className="panel__header">
+            <div className="panel__title">當月份合計</div>
+            <div className="panel__meta">{totals.peopleCount} 位</div>
+          </div>
+          <div className="panel__body">
+            <div className="summary-strip">
+              <div className="summary-strip__item">
+                <div className="summary-strip__label">應完成工時</div>
+                <div className="summary-strip__value">{fmtHours(totals.expected_total)}h</div>
+              </div>
+              <div className="summary-strip__item">
+                <div className="summary-strip__label">接收總時數</div>
+                <div className="summary-strip__value">{fmtHours(totals.received_total)}h</div>
+              </div>
+              <div className="summary-strip__item">
+                <div className="summary-strip__label">任務缺口</div>
+                <div className="summary-strip__value">
+                  {totals.gap_total > 0 ? (
+                    <span className="badge badge--warn">缺 {fmtHours(totals.gap_total)}h</span>
+                  ) : totals.gap_total < 0 ? (
+                    <span className="badge badge--good">超出 {fmtHours(Math.abs(totals.gap_total))}h</span>
+                  ) : (
+                    <span className="badge badge--good">剛好</span>
+                  )}
+                </div>
+              </div>
+              <div className="summary-strip__item">
+                <div className="summary-strip__label">已執行</div>
+                <div className="summary-strip__value">{fmtHours(totals.used_total)}h</div>
+              </div>
+              <div className="summary-strip__item">
+                <div className="summary-strip__label">剩餘</div>
+                <div className="summary-strip__value">{fmtHours(totals.remaining_total)}h</div>
+              </div>
+            </div>
+            <div className="muted" style={{ marginTop: 8, fontSize: 12 }}>
+              註：合計為「人員彙總」目前顯示資料的加總（會隨部門/月份篩選變動）。
+            </div>
+          </div>
+        </section>
+
         {error ? (
           <section className="panel" style={{ marginBottom: 12 }}>
             <div className="panel__body">
@@ -233,6 +296,66 @@ export default function DeptPersonMonthDashboardClient() {
             <div className="panel__meta">{rows.length} 位</div>
           </div>
           <div className="panel__body">
+            <div className="chart" style={{ marginBottom: 12 }}>
+              {chartRows.length ? (
+                <div className="hchart">
+                  <div className="hchart__legend">
+                    <span className="badge" style={{ borderColor: 'rgba(74,222,128,0.35)', color: 'rgba(74,222,128,0.95)' }}>
+                      已執行
+                    </span>
+                    <span className="badge" style={{ borderColor: 'rgba(96,165,250,0.45)', color: 'rgba(96,165,250,0.95)' }}>
+                      接收剩餘
+                    </span>
+                    <span className="badge badge--warn">任務缺口</span>
+                    <span className="badge badge--bad">超出應完成</span>
+                    <span className="muted" style={{ marginLeft: 8 }}>
+                      以 {fmtHours(chartScaleMax)}h 為最大尺度
+                    </span>
+                  </div>
+
+                  {chartRows.map((r) => {
+                    const received = Number(r.received_total_hours || 0);
+                    const used = Number(r.used_hours || 0);
+                    const exec = Math.max(used, 0);
+                    const remainInReceived = Math.max(received - exec, 0);
+                    const gap = Math.max(expectedHours - received, 0);
+                    const over = Math.max(received - expectedHours, 0);
+                    const totalLen = Math.max(expectedHours, received, 0);
+
+                    const pct = (v: number) => `${(Math.max(v, 0) / chartScaleMax) * 100}%`;
+                    const rightText =
+                      over > 0
+                        ? `超出 ${fmtHours(over)}h`
+                        : gap > 0
+                          ? `缺 ${fmtHours(gap)}h`
+                          : `OK`;
+
+                    return (
+                      <div className="hchart__row" key={String(r.person_id)}>
+                        <div className="hchart__label" title={r.display_name}>
+                          {r.display_name}
+                        </div>
+                        <div className="hchart__bar" title={`接收 ${fmtHours(received)}h / 應完成 ${fmtHours(expectedHours)}h / 已執行 ${fmtHours(exec)}h`}>
+                          <div className="stackbar">
+                            <div className="stackbar__seg stackbar__seg--used" style={{ width: pct(exec) }} />
+                            <div className="stackbar__seg stackbar__seg--recv" style={{ width: pct(remainInReceived) }} />
+                            <div className="stackbar__seg stackbar__seg--gap" style={{ width: pct(gap) }} />
+                            <div className="stackbar__seg stackbar__seg--over" style={{ width: pct(over) }} />
+                          </div>
+                          <div className="hchart__meta muted">
+                            接收 {fmtHours(received)}h｜已執行 {fmtHours(exec)}h｜剩餘 {fmtHours(r.remaining_hours)}h｜{rightText}
+                            {totalLen === 0 ? '（無資料）' : ''}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="chart-empty">尚無資料</div>
+              )}
+            </div>
+
             <div className="table-scroll">
               <table className="table">
                 <thead>
