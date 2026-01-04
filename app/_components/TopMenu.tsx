@@ -7,9 +7,7 @@ type LinkItem = { href: string; label: string };
 const LINKS: LinkItem[] = [
   { href: '/', label: '各專案任務工時明細表' },
   { href: '/pm-dashboard', label: 'PM 負載彙總表' },
-  { href: '/people-dashboard', label: '人員任務儀表板' },
   { href: '/dept-person-month-dashboard', label: '部門/人員任務（月）' },
-  { href: '/schema', label: '資料表探索' }
 ];
 
 export default function TopMenu() {
