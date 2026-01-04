@@ -75,6 +75,7 @@ export default function PmDashboardClient() {
   const [projectTypeMap, setProjectTypeMap] = useState<Record<string, string>>({});
   // store raw type values selected (server-side values)
   const [selectedProjectTypeValues, setSelectedProjectTypeValues] = useState<string[]>([]);
+  const [projectTypePanelOpen, setProjectTypePanelOpen] = useState(false);
   const selectedProjectTypesParam = useMemo(
     () => (selectedProjectTypeValues.length ? selectedProjectTypeValues.join(',') : ''),
     [selectedProjectTypeValues]
@@ -281,8 +282,14 @@ export default function PmDashboardClient() {
             <div className="panel__meta">
               已選 {selectedProjectTypeValues.length}/{projectTypeOptions.length}
             </div>
+            <div className="panel__actions">
+              <button className="btn" type="button" onClick={() => setProjectTypePanelOpen((v) => !v)}>
+                {projectTypePanelOpen ? '收合' : '展開'}
+              </button>
+            </div>
           </div>
-          <div className="panel__body">
+          {projectTypePanelOpen ? (
+            <div className="panel__body">
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginBottom: 10 }}>
               <button
                 className="btn"
@@ -341,7 +348,8 @@ export default function PmDashboardClient() {
                 <div className="muted">載入中…</div>
               )}
             </div>
-          </div>
+            </div>
+          ) : null}
         </section>
 
         {error ? (

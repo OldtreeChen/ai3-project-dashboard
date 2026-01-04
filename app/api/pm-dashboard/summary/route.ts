@@ -84,7 +84,7 @@ export async function GET(req: Request) {
         LEFT JOIN ${T} t ON t.${tProjectId} = p.${pId}
         ${D && dId && dName && pDeptId ? `LEFT JOIN ${D} dp ON dp.${dId} = p.${pDeptId}` : ''}
         WHERE p.${pName} NOT LIKE '%新人%'
-          AND p.${pName} LIKE '【AI】%'
+          AND (p.${pName} LIKE '【AI】%' OR p.${pName} LIKE 'AI】%')
           ${executingFilter}
           ${projectDeptFilter}
           ${projectTypeFilter}
@@ -141,7 +141,7 @@ export async function GET(req: Request) {
                 ${D && dId && dName && pDeptId ? `LEFT JOIN ${D} dp ON dp.${dId} = p.${pDeptId}` : ''}
                 WHERE p.${pType} IS NOT NULL AND p.${pType} <> ''
                   AND p.${pName} NOT LIKE '%新人%'
-                  AND p.${pName} LIKE '【AI】%'
+                  AND (p.${pName} LIKE '【AI】%' OR p.${pName} LIKE 'AI】%')
                   ${executingFilter}
                   ${projectDeptFilter}
                 LIMIT 200

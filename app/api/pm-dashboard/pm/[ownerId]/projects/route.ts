@@ -68,7 +68,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ ownerId: string
     ${D && dId && dName && pDeptId ? `LEFT JOIN ${D} d ON d.${dId} = p.${pDeptId}` : ''}
     WHERE p.${pOwner} = ?
       AND p.${pName} NOT LIKE '%新人%'
-      AND p.${pName} LIKE '【AI】%'
+      AND (p.${pName} LIKE '【AI】%' OR p.${pName} LIKE 'AI】%')
       ${executingFilter}
       ${projectDeptFilter}
       ${projectTypeFilter}
