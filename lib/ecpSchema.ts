@@ -166,18 +166,62 @@ const globalCache = globalThis as unknown as {
   __ecpMapping?: EcpMapping;
 };
 
+async function pickExistingTable(candidates: string[]): Promise<string | null> {
+  if (!candidates.length) return null;
+  try {
+    const placeholders = candidates.map(() => '?').join(',');
+    const sql = `
+      SELECT t.table_name
+      FROM information_schema.tables t
+      WHERE t.table_schema = DATABASE()
+        AND t.table_name IN (${placeholders})
+      LIMIT 1
+    `;
+    const row = (await prisma.$queryRawUnsafe<Array<{ table_name: string }>>(sql, ...candidates))?.[0];
+    return row?.table_name || null;
+  } catch {
+    return null;
+  }
+}
+
+async function pickTableWithMostColumns(candidates: string[]): Promise<string | null> {
+  if (!candidates.length) return null;
+  try {
+    const placeholders = candidates.map(() => '?').join(',');
+    const sql = `
+      SELECT c.table_name, COUNT(1) AS cnt
+      FROM information_schema.columns c
+      WHERE c.table_schema = DATABASE()
+        AND c.table_name IN (${placeholders})
+      GROUP BY c.table_name
+      ORDER BY cnt DESC
+      LIMIT 1
+    `;
+    const row = (await prisma.$queryRawUnsafe<Array<{ table_name: string; cnt: number }>>(sql, ...candidates))?.[0];
+    return row?.table_name || null;
+  } catch {
+    return null;
+  }
+}
+
 export async function getEcpMapping(): Promise<EcpMapping> {
   if (!globalCache.__ecpCols) globalCache.__ecpCols = new Map();
 
   const cfg = tryLoadConfig();
+  const dictTableFromCfgRaw = cfg?.ecp?.tables?.dictionaryItem || cfg?.ecp?.tables?.dictionary;
+  // If config.json points to a non-existent table (or no visible columns), ignore it and auto-pick.
+  const dictTableFromCfg = dictTableFromCfgRaw ? await pickTableWithMostColumns([String(dictTableFromCfgRaw)]) : null;
+  const deptTableFromCfg = cfg?.ecp?.tables?.department;
+  const timeReportFromCfg = cfg?.ecp?.tables?.timeReport;
   const tables: TablesConfig = {
     project: cfg?.ecp?.tables?.project || 'TcProject',
     task: cfg?.ecp?.tables?.task || 'TcTask',
     time: cfg?.ecp?.tables?.timeDetail || cfg?.ecp?.tables?.time || 'TcTimeReportDetail',
-    timeReport: cfg?.ecp?.tables?.timeReport || 'TcTimeReport',
-    dictionaryItem: cfg?.ecp?.tables?.dictionaryItem || cfg?.ecp?.tables?.dictionary || 'QsDictionaryItem',
+    timeReport: timeReportFromCfg || 'TcTimeReport',
+    // Prefer the table that actually has columns (some envs have QsDictionaryItem as a view with no columns visible)
+    dictionaryItem: dictTableFromCfg || (await pickTableWithMostColumns(['QsDictionaryItem', 'TsDictionaryItem'])) || 'TsDictionaryItem',
     user: cfg?.ecp?.tables?.user || 'TsUser',
-    department: cfg?.ecp?.tables?.department || 'TsDepartment'
+    department: deptTableFromCfg || (await pickExistingTable(['TsDepartment'])) || 'TsDepartment'
   };
 
   const tablesToLoad = Array.from(

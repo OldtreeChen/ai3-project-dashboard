@@ -13,6 +13,7 @@ type Project = {
   end_date: string | null;
   actual_hours: number;
   status?: string | null;
+  status_zh?: string | null;
   owner_user_id?: string | number | null;
   owner_name?: string | null;
   project_type?: string | null;
@@ -266,7 +267,7 @@ export default function DashboardClient() {
             <select className="field__control" value={projectId} onChange={(e) => setProjectId(e.target.value)}>
               {projects.map((p) => {
                 const typeTag = p.project_type ? `【${p.project_type}】` : '';
-                const statusTag = p.status ? `（${toZhStatus(p.status)}）` : '';
+                const statusTag = p.status ? `（${p.status_zh || toZhStatus(p.status)}）` : '';
                 const label = `${typeTag}${p.code ? `${p.code}｜` : ''}${p.name}${statusTag}`;
                 return (
                   <option key={String(p.id)} value={String(p.id)}>
@@ -325,7 +326,7 @@ export default function DashboardClient() {
               </div>
               <div>
                 <span className="muted">狀態：</span>
-                {selectedProject?.status ? toZhStatus(selectedProject.status) : <span className="muted">--</span>}
+                {selectedProject?.status ? selectedProject.status_zh || toZhStatus(selectedProject.status) : <span className="muted">--</span>}
               </div>
               <div>
                 <span className="muted">負責人：</span>

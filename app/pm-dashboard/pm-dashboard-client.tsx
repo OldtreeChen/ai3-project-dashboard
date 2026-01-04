@@ -20,6 +20,7 @@ type ProjectRow = {
   code: string | null;
   name: string;
   status: string | null;
+  status_zh?: string | null;
   project_type: string | null;
   planned_hours: number;
   used_hours: number;
@@ -92,6 +93,7 @@ export default function PmDashboardClient() {
         code: p.code ?? null,
         name: p.name,
         status: p.status ?? null,
+        status_zh: p.status_zh ?? null,
         project_type: p.project_type ?? null,
         planned_hours: Number(p.planned_hours || 0),
         used_hours: Number(p.used_hours || 0),
@@ -205,7 +207,7 @@ export default function PmDashboardClient() {
                           <td className="pm-project-table__desc" title={p.name}>
                             {p.code ? `${p.code}｜${p.name}` : p.name}
                           </td>
-                          <td>{toZhStatus(p.status)}</td>
+                          <td>{p.status_zh || toZhStatus(p.status)}</td>
                           <td className="num">{fmtHours(p.planned_hours)}</td>
                           <td className="num">{fmtHours(p.used_hours)}</td>
                           <td className="num">{fmtHours(p.remaining_hours)}</td>

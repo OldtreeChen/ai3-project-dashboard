@@ -4,6 +4,7 @@ import { getDictionaryTextsByValues } from '@/lib/dictionary';
 
 const globalCache = globalThis as unknown as {
   __projectTypeDictId?: string | null;
+  __projectTypeDictTable?: string | null;
   __projectTypeTextByValue?: Map<string, string>;
 };
 
@@ -24,6 +25,15 @@ const PROJECT_TYPE_TEXT_HINTS = [
   '系統租賃專案'
 ];
 
+const FALLBACK_PROJECT_TYPE_ZH: Record<string, string> = {
+  Implementation: '建置類專案',
+  Build: '建置類專案',
+  Maintenance: '維護類',
+  ManHour: '人時案',
+  Manhour: '人時案',
+  MainPower: '人時案'
+};
+
 function normalizeTextForCompare(s: string) {
   // 去除空白（含全形空白），並把全形括號轉半形，便於比對
   return s
@@ -34,9 +44,16 @@ function normalizeTextForCompare(s: string) {
 }
 
 async function getProjectTypeDictionaryId(): Promise<string | null> {
+  const m = await getEcpMapping();
+  const dictTable = m.tables.dictionaryItem || null;
+  // If dictionary table changes (e.g. QsDictionaryItem -> TsDictionaryItem), reset cache
+  if (globalCache.__projectTypeDictTable !== dictTable) {
+    globalCache.__projectTypeDictTable = dictTable;
+    globalCache.__projectTypeDictId = undefined;
+    globalCache.__projectTypeTextByValue = undefined;
+  }
   if (globalCache.__projectTypeDictId !== undefined) return globalCache.__projectTypeDictId;
 
-  const m = await getEcpMapping();
   if (!m.tables.dictionaryItem || !m.dictionaryItem?.dictionaryId || !m.dictionaryItem?.text) {
     globalCache.__projectTypeDictId = null;
     return null;
@@ -115,6 +132,13 @@ export async function getProjectTypeTextsByValues(values: unknown[]): Promise<Ma
     }
   } catch {
     // ignore
+  }
+
+  // fallback mapping for known codes (when dictionary does not contain them)
+  for (const k of missing) {
+    if (cache.has(k)) continue;
+    const t = FALLBACK_PROJECT_TYPE_ZH[k];
+    if (t) cache.set(k, t);
   }
 
   return cache;

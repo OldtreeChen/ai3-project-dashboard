@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { getEcpColumns, getEcpMapping, sqlId } from '@/lib/ecpSchema';
 import { getProjectTypeTextsByValues } from '@/lib/projectTypeDictionary';
+import { getProjectStatusTextsByValues } from '@/lib/projectStatusDictionary';
 import { getProjectOwnerColumn } from '@/lib/projectOwner';
 import { getProjectTypeColumn } from '@/lib/projectType';
 import { parseIdParam, parseIntParam } from '../_utils';
@@ -116,6 +117,14 @@ export async function GET(req: Request) {
   for (const r of rows) {
     const raw = String(r.project_type_raw ?? '').trim();
     r.project_type = raw ? (dict.get(raw) || raw) : null;
+  }
+
+  // project status zh (dictionary-backed)
+  const statusValues = Array.from(new Set(rows.map((r) => String(r.status ?? '').trim()).filter(Boolean)));
+  const statusDict = await getProjectStatusTextsByValues(statusValues);
+  for (const r of rows) {
+    const raw = String(r.status ?? '').trim();
+    r.status_zh = raw ? statusDict.get(raw) || null : null;
   }
 
   return Response.json(rows);
