@@ -302,6 +302,8 @@ body{
 }
 .task-table th, .task-table td{
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .task-table__desc{
   max-width: 640px;
@@ -321,6 +323,14 @@ body{
 .task-table th:nth-child(3),
 .task-table td:nth-child(3){
   width: 10%;
+}
+
+/* Task table: date columns should be wide enough to avoid overlap */
+.task-table th:nth-child(7),
+.task-table td:nth-child(7),
+.task-table th:nth-child(8),
+.task-table td:nth-child(8){
+  width: 170px;
 }
 
 /* PM dashboard project table layout tweaks */
