@@ -17,6 +17,11 @@ type OwnerRow = {
 
 type Department = { id: string | number; name: string };
 
+type SummaryResponse = {
+  owners: OwnerRow[];
+  project_type_map?: Record<string, string>;
+};
+
 type ProjectRow = {
   id: string | number;
   code: string | null;
@@ -67,6 +72,14 @@ export default function PmDashboardClient() {
   const [departmentId, setDepartmentId] = useState<string>('');
   const [ownerFilterId, setOwnerFilterId] = useState<string>('');
 
+  const [projectTypeMap, setProjectTypeMap] = useState<Record<string, string>>({});
+  // store raw type values selected (server-side values)
+  const [selectedProjectTypeValues, setSelectedProjectTypeValues] = useState<string[]>([]);
+  const selectedProjectTypesParam = useMemo(
+    () => (selectedProjectTypeValues.length ? selectedProjectTypeValues.join(',') : ''),
+    [selectedProjectTypeValues]
+  );
+
   const [selectedOwnerId, setSelectedOwnerId] = useState<string>('');
   const [projectsLoading, setProjectsLoading] = useState(false);
   const [projectsError, setProjectsError] = useState('');
@@ -85,6 +98,25 @@ export default function PmDashboardClient() {
     const remaining_load_months = remaining_hours / 900;
     return { project_count, planned_hours, used_hours, remaining_hours, remaining_load_months };
   }, [owners]);
+
+  const projectTypeOptions = useMemo(() => {
+    const entries = Object.entries(projectTypeMap || {});
+    // Stable: sort by zh label then raw value
+    return entries
+      .map(([raw, zh]) => ({ raw, zh: String(zh || raw) }))
+      .sort((a, b) => a.zh.localeCompare(b.zh, 'zh-Hant') || a.raw.localeCompare(b.raw));
+  }, [projectTypeMap]);
+
+  // Initialize default selection: select all types except "人時案"
+  useEffect(() => {
+    if (!projectTypeOptions.length) return;
+    if (selectedProjectTypeValues.length) return;
+    const withoutMainPower = projectTypeOptions
+      .filter((t) => String(t.zh).trim() !== '人時案')
+      .map((t) => t.raw);
+    setSelectedProjectTypeValues(withoutMainPower.length ? withoutMainPower : projectTypeOptions.map((t) => t.raw));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectTypeOptions]);
 
   useEffect(() => {
     (async () => {
@@ -107,9 +139,10 @@ export default function PmDashboardClient() {
       setLoading(true);
       setError('');
       try {
-        const q = buildQuery({ departmentId });
-        const data = await apiGet<{ owners: OwnerRow[] }>(`/api/pm-dashboard/summary${q}`);
+        const q = buildQuery({ departmentId, projectTypes: selectedProjectTypesParam });
+        const data = await apiGet<SummaryResponse>(`/api/pm-dashboard/summary${q}`);
         setOwnerOptions(data.owners || []);
+        if (data.project_type_map) setProjectTypeMap(data.project_type_map);
       } catch (e: any) {
         setError(e?.message || '載入失敗');
         setOwnerOptions([]);
@@ -117,7 +150,7 @@ export default function PmDashboardClient() {
         setLoading(false);
       }
     })();
-  }, [departmentId]);
+  }, [departmentId, selectedProjectTypesParam]);
 
   // refresh summary whenever filters change
   useEffect(() => {
@@ -125,10 +158,11 @@ export default function PmDashboardClient() {
       setLoading(true);
       setError('');
       try {
-        const q = buildQuery({ departmentId, ownerId: ownerFilterId });
-        const data = await apiGet<{ owners: OwnerRow[] }>(`/api/pm-dashboard/summary${q}`);
+        const q = buildQuery({ departmentId, ownerId: ownerFilterId, projectTypes: selectedProjectTypesParam });
+        const data = await apiGet<SummaryResponse>(`/api/pm-dashboard/summary${q}`);
         const nextOwners = data.owners || [];
         setOwners(nextOwners);
+        if (data.project_type_map) setProjectTypeMap(data.project_type_map);
 
         // if current selection is not in the filtered summary, clear details
         const stillExists = selectedOwnerId ? nextOwners.some((o) => String(o.owner_id) === String(selectedOwnerId)) : true;
@@ -145,7 +179,7 @@ export default function PmDashboardClient() {
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [departmentId, ownerFilterId]);
+  }, [departmentId, ownerFilterId, selectedProjectTypesParam]);
 
   const toggleOwner = async (ownerId: string) => {
     const next = String(ownerId);
@@ -159,7 +193,8 @@ export default function PmDashboardClient() {
     setProjectsLoading(true);
     setProjectsError('');
     try {
-      const data = await apiGet<{ projects: any[] }>(`/api/pm-dashboard/pm/${encodeURIComponent(next)}/projects`);
+      const q = buildQuery({ projectTypes: selectedProjectTypesParam });
+      const data = await apiGet<{ projects: any[] }>(`/api/pm-dashboard/pm/${encodeURIComponent(next)}/projects${q}`);
       const normalized: ProjectRow[] = (data.projects || []).map((p: any) => ({
         id: p.id,
         code: p.code ?? null,
@@ -239,6 +274,75 @@ export default function PmDashboardClient() {
             </select>
           </label>
         </div>
+
+        <section className="panel" style={{ marginBottom: 12 }}>
+          <div className="panel__header">
+            <div className="panel__title">專案類型（多選）</div>
+            <div className="panel__meta">
+              已選 {selectedProjectTypeValues.length}/{projectTypeOptions.length}
+            </div>
+          </div>
+          <div className="panel__body">
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginBottom: 10 }}>
+              <button
+                className="btn"
+                type="button"
+                onClick={() => setSelectedProjectTypeValues(projectTypeOptions.map((t) => t.raw))}
+                disabled={!projectTypeOptions.length}
+              >
+                全選
+              </button>
+              <button className="btn" type="button" onClick={() => setSelectedProjectTypeValues([])} disabled={!projectTypeOptions.length}>
+                全不選（等同不篩選）
+              </button>
+              <button
+                className="btn"
+                type="button"
+                onClick={() => {
+                  const withoutMainPower = projectTypeOptions
+                    .filter((t) => String(t.zh).trim() !== '人時案')
+                    .map((t) => t.raw);
+                  setSelectedProjectTypeValues(withoutMainPower.length ? withoutMainPower : projectTypeOptions.map((t) => t.raw));
+                }}
+                disabled={!projectTypeOptions.length}
+              >
+                排除人時案
+              </button>
+              <span className="muted" style={{ fontSize: 12 }}>
+                預設不勾選「人時案」
+              </span>
+            </div>
+
+            <div className="checklist">
+              {projectTypeOptions.length ? (
+                projectTypeOptions.map((t) => {
+                  const checked = selectedProjectTypeValues.includes(t.raw);
+                  return (
+                    <label key={t.raw} className="checklist__item">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(e) => {
+                          const next = e.target.checked
+                            ? Array.from(new Set([...selectedProjectTypeValues, t.raw]))
+                            : selectedProjectTypeValues.filter((x) => x !== t.raw);
+                          setSelectedProjectTypeValues(next);
+                          setSelectedOwnerId('');
+                          setProjects([]);
+                          setProjectsError('');
+                        }}
+                      />
+                      <span className="checklist__label">{t.zh}</span>
+                      <span className="checklist__meta muted">({t.raw})</span>
+                    </label>
+                  );
+                })
+              ) : (
+                <div className="muted">載入中…</div>
+              )}
+            </div>
+          </div>
+        </section>
 
         {error ? (
           <section className="panel" style={{ marginBottom: 12 }}>

@@ -7,9 +7,14 @@ import { getProjectTypeColumn } from '@/lib/projectType';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(_req: Request, ctx: { params: Promise<{ ownerId: string }> }) {
+export async function GET(req: Request, ctx: { params: Promise<{ ownerId: string }> }) {
   const { ownerId } = await ctx.params;
   if (!ownerId) return Response.json({ error: 'invalid ownerId' }, { status: 400 });
+  const url = new URL(req.url);
+  const projectTypesParam = String(url.searchParams.get('projectTypes') || '').trim();
+  const projectTypeValues = projectTypesParam
+    ? Array.from(new Set(projectTypesParam.split(',').map((s) => s.trim()).filter(Boolean)))
+    : [];
 
   const m = await getEcpMapping();
   const P = sqlId(m.tables.project);
@@ -45,6 +50,9 @@ export async function GET(_req: Request, ctx: { params: Promise<{ ownerId: strin
       ? `AND (d.${dName} LIKE '%AI專案一部%' OR d.${dName} LIKE '%AI專案二部%')`
       : '';
 
+  const projectTypeFilter =
+    pType && projectTypeValues.length ? `AND p.${pType} IN (${projectTypeValues.map(() => '?').join(',')})` : '';
+
   const sql = `
     SELECT
       p.${pId} AS id,
@@ -63,11 +71,12 @@ export async function GET(_req: Request, ctx: { params: Promise<{ ownerId: strin
       AND p.${pName} LIKE '【AI】%'
       ${executingFilter}
       ${projectDeptFilter}
+      ${projectTypeFilter}
     GROUP BY p.${pId}
     ORDER BY remaining_hours DESC, planned_hours DESC, p.${pId} DESC
   `;
 
-  const rows = await prisma.$queryRawUnsafe<any[]>(sql, ownerId);
+  const rows = await prisma.$queryRawUnsafe<any[]>(sql, ownerId, ...projectTypeValues);
 
   const typeValues = Array.from(new Set(rows.map((r) => String(r.project_type_raw ?? '').trim()).filter(Boolean)));
   const dict = await getProjectTypeTextsByValues(typeValues);

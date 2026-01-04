@@ -133,6 +133,32 @@ body{
   box-shadow: 0 0 0 3px rgba(96,165,250,0.18);
 }
 
+.checklist{
+  display:flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+}
+.checklist__item{
+  display:flex;
+  align-items:center;
+  gap: 8px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.03);
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 12px;
+}
+.checklist__item input{
+  accent-color: rgba(96,165,250,0.95);
+}
+.checklist__label{
+  color: rgba(255,255,255,0.90);
+  font-weight: 650;
+}
+.checklist__meta{
+  font-size: 11px;
+}
+
 .btn{
   height: 36px;
   padding: 0 14px;

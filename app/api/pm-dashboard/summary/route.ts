@@ -12,6 +12,10 @@ export async function GET(req: Request) {
     const url = new URL(req.url);
     const departmentId = parseIdParam(url.searchParams.get('departmentId'));
     const ownerId = parseIdParam(url.searchParams.get('ownerId'));
+    const projectTypesParam = String(url.searchParams.get('projectTypes') || '').trim();
+    const projectTypeValues = projectTypesParam
+      ? Array.from(new Set(projectTypesParam.split(',').map((s) => s.trim()).filter(Boolean)))
+      : [];
 
     const m = await getEcpMapping();
     const P = sqlId(m.tables.project);
@@ -54,8 +58,13 @@ export async function GET(req: Request) {
         ? `AND (dp.${dName} LIKE '%AI專案一部%' OR dp.${dName} LIKE '%AI專案二部%')`
         : '';
 
+    const subArgs: Array<string> = [];
     const args: Array<string> = [];
     let outerWhere = 'WHERE 1=1';
+
+    const projectTypeFilter =
+      pType && projectTypeValues.length ? `AND p.${pType} IN (${projectTypeValues.map(() => '?').join(',')})` : '';
+    if (pType && projectTypeValues.length) subArgs.push(...projectTypeValues);
 
     const sql = `
       SELECT
@@ -78,6 +87,7 @@ export async function GET(req: Request) {
           AND p.${pName} LIKE '【AI】%'
           ${executingFilter}
           ${projectDeptFilter}
+          ${projectTypeFilter}
         GROUP BY p.${pId}, p.${pOwner}
       ) x
       LEFT JOIN ${U} u ON u.${uId} = x.owner_id
@@ -102,7 +112,7 @@ export async function GET(req: Request) {
       ORDER BY remaining_hours DESC, planned_hours DESC, owner_name ASC
     `;
 
-    const rows = await prisma.$queryRawUnsafe<any[]>(sql, ...args);
+    const rows = await prisma.$queryRawUnsafe<any[]>(sql, ...subArgs, ...args);
 
     // normalize BigInt/Decimal-ish values for JSON safety
     const owners = rows.map((r) => {
@@ -125,7 +135,17 @@ export async function GET(req: Request) {
       ? Array.from(
           new Set(
             (await prisma.$queryRawUnsafe<any[]>(
-              `SELECT DISTINCT p.${pType} AS v FROM ${P} p WHERE p.${pType} IS NOT NULL AND p.${pType} <> '' LIMIT 200`
+              `
+                SELECT DISTINCT p.${pType} AS v
+                FROM ${P} p
+                ${D && dId && dName && pDeptId ? `LEFT JOIN ${D} dp ON dp.${dId} = p.${pDeptId}` : ''}
+                WHERE p.${pType} IS NOT NULL AND p.${pType} <> ''
+                  AND p.${pName} NOT LIKE '%新人%'
+                  AND p.${pName} LIKE '【AI】%'
+                  ${executingFilter}
+                  ${projectDeptFilter}
+                LIMIT 200
+              `
             ))
               .map((x) => String(x.v ?? '').trim())
               .filter(Boolean)
