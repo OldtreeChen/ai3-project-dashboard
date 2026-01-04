@@ -223,6 +223,21 @@ body{
   overflow: auto;
   max-height: calc(84vh - 52px);
 }
+.modal--iframe{
+  width: min(1600px, 98vw);
+}
+.modal__body--iframe{
+  padding: 0;
+  overflow: hidden;
+  max-height: calc(84vh - 52px);
+}
+.modal__iframe{
+  width: 100%;
+  height: calc(84vh - 52px);
+  border: 0;
+  display: block;
+  background: #0b1220;
+}
 .modal__close{
   height: 32px;
   padding: 0 10px;

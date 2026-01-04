@@ -1,7 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import TopMenu from '../_components/TopMenu';
 import { toZhStatus } from '@/lib/statusText';
 
@@ -76,15 +75,15 @@ export default function PmDashboardClient() {
   // store raw type values selected (server-side values)
   const [selectedProjectTypeValues, setSelectedProjectTypeValues] = useState<string[]>([]);
   const [projectTypePanelOpen, setProjectTypePanelOpen] = useState(false);
-  const selectedProjectTypesParam = useMemo(
-    () => (selectedProjectTypeValues.length ? selectedProjectTypeValues.join(',') : ''),
-    [selectedProjectTypeValues]
-  );
+  const projectTypeTouched = useRef(false);
 
   const [selectedOwnerId, setSelectedOwnerId] = useState<string>('');
   const [projectsLoading, setProjectsLoading] = useState(false);
   const [projectsError, setProjectsError] = useState('');
   const [projects, setProjects] = useState<ProjectRow[]>([]);
+
+  const [projectModalProjectId, setProjectModalProjectId] = useState<string>('');
+  const [projectModalProjectName, setProjectModalProjectName] = useState<string>('');
 
   const selectedOwner = useMemo(
     () => (selectedOwnerId ? owners.find((o) => String(o.owner_id) === String(selectedOwnerId)) : null),
@@ -108,16 +107,23 @@ export default function PmDashboardClient() {
       .sort((a, b) => a.zh.localeCompare(b.zh, 'zh-Hant') || a.raw.localeCompare(b.raw));
   }, [projectTypeMap]);
 
-  // Initialize default selection: select all types except "人時案"
+  // 預設一律「全選」（包含人時案）。若使用者沒手動操作且不是全選，就自動補回全選。
+  const effectiveSelectedProjectTypeValues = useMemo(() => {
+    if (!projectTypeOptions.length) return selectedProjectTypeValues;
+    return selectedProjectTypeValues.length ? selectedProjectTypeValues : projectTypeOptions.map((t) => t.raw);
+  }, [projectTypeOptions, selectedProjectTypeValues]);
+
+  const selectedProjectTypesParam = useMemo(() => {
+    return effectiveSelectedProjectTypeValues.length ? effectiveSelectedProjectTypeValues.join(',') : '';
+  }, [effectiveSelectedProjectTypeValues]);
+
   useEffect(() => {
     if (!projectTypeOptions.length) return;
-    if (selectedProjectTypeValues.length) return;
-    const withoutMainPower = projectTypeOptions
-      .filter((t) => String(t.zh).trim() !== '人時案')
-      .map((t) => t.raw);
-    setSelectedProjectTypeValues(withoutMainPower.length ? withoutMainPower : projectTypeOptions.map((t) => t.raw));
+    if (projectTypeTouched.current) return;
+    if (selectedProjectTypeValues.length === projectTypeOptions.length) return;
+    setSelectedProjectTypeValues(projectTypeOptions.map((t) => t.raw));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectTypeOptions]);
+  }, [projectTypeOptions, selectedProjectTypeValues.length]);
 
   useEffect(() => {
     (async () => {
@@ -216,6 +222,21 @@ export default function PmDashboardClient() {
     }
   };
 
+  const closeProjectModal = () => {
+    setProjectModalProjectId('');
+    setProjectModalProjectName('');
+  };
+
+  // Close project modal with ESC
+  useEffect(() => {
+    if (!projectModalProjectId) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeProjectModal();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [projectModalProjectId]);
+
   return (
     <div className="app">
       <header className="topbar">
@@ -280,7 +301,7 @@ export default function PmDashboardClient() {
           <div className="panel__header">
             <div className="panel__title">專案類型（多選）</div>
             <div className="panel__meta">
-              已選 {selectedProjectTypeValues.length}/{projectTypeOptions.length}
+              已選 {effectiveSelectedProjectTypeValues.length}/{projectTypeOptions.length}
             </div>
             <div className="panel__actions">
               <button className="btn" type="button" onClick={() => setProjectTypePanelOpen((v) => !v)}>
@@ -294,18 +315,19 @@ export default function PmDashboardClient() {
               <button
                 className="btn"
                 type="button"
-                onClick={() => setSelectedProjectTypeValues(projectTypeOptions.map((t) => t.raw))}
+                onClick={() => {
+                  projectTypeTouched.current = true;
+                  setSelectedProjectTypeValues(projectTypeOptions.map((t) => t.raw));
+                }}
                 disabled={!projectTypeOptions.length}
               >
                 全選
-              </button>
-              <button className="btn" type="button" onClick={() => setSelectedProjectTypeValues([])} disabled={!projectTypeOptions.length}>
-                全不選（等同不篩選）
               </button>
               <button
                 className="btn"
                 type="button"
                 onClick={() => {
+                  projectTypeTouched.current = true;
                   const withoutMainPower = projectTypeOptions
                     .filter((t) => String(t.zh).trim() !== '人時案')
                     .map((t) => t.raw);
@@ -315,24 +337,21 @@ export default function PmDashboardClient() {
               >
                 排除人時案
               </button>
-              <span className="muted" style={{ fontSize: 12 }}>
-                預設不勾選「人時案」
-              </span>
             </div>
 
             <div className="checklist">
               {projectTypeOptions.length ? (
                 projectTypeOptions.map((t) => {
-                  const checked = selectedProjectTypeValues.includes(t.raw);
+                  const checked = effectiveSelectedProjectTypeValues.includes(t.raw);
                   return (
                     <label key={t.raw} className="checklist__item">
                       <input
                         type="checkbox"
                         checked={checked}
                         onChange={(e) => {
-                          const next = e.target.checked
-                            ? Array.from(new Set([...selectedProjectTypeValues, t.raw]))
-                            : selectedProjectTypeValues.filter((x) => x !== t.raw);
+                          projectTypeTouched.current = true;
+                          const base = effectiveSelectedProjectTypeValues;
+                          const next = e.target.checked ? Array.from(new Set([...base, t.raw])) : base.filter((x) => x !== t.raw);
                           setSelectedProjectTypeValues(next);
                           setSelectedOwnerId('');
                           setProjects([]);
@@ -468,9 +487,16 @@ export default function PmDashboardClient() {
                           <td className="num">{fmtHours(p.used_hours)}</td>
                           <td className="num">{fmtHours(p.remaining_hours)}</td>
                           <td style={{ textAlign: 'right' }}>
-                            <Link className="btn" href={`/?projectId=${encodeURIComponent(String(p.id))}`}>
+                            <button
+                              className="btn"
+                              type="button"
+                              onClick={() => {
+                                setProjectModalProjectId(String(p.id));
+                                setProjectModalProjectName(p.name || String(p.id));
+                              }}
+                            >
                               明細
-                            </Link>
+                            </button>
                           </td>
                         </tr>
                       ))
@@ -488,6 +514,34 @@ export default function PmDashboardClient() {
           </section>
         ) : null}
       </main>
+
+      {projectModalProjectId ? (
+        <div
+          className="modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) closeProjectModal();
+          }}
+        >
+          <div className="modal modal--iframe" onMouseDown={(e) => e.stopPropagation()}>
+            <div className="modal__header">
+              <div>
+                <div className="modal__title">專案明細｜{projectModalProjectName}</div>
+                <div className="panel__meta" style={{ marginTop: 2 }}>
+                  不會離開此頁面（ESC / 點背景 / 右上角關閉）
+                </div>
+              </div>
+              <button className="modal__close" type="button" onClick={closeProjectModal}>
+                關閉
+              </button>
+            </div>
+            <div className="modal__body modal__body--iframe">
+              <iframe title="project-detail" className="modal__iframe" src={`/?projectId=${encodeURIComponent(projectModalProjectId)}`} />
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

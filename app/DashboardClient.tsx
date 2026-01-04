@@ -108,7 +108,17 @@ export default function DashboardClient() {
         setDepartments(ds);
         setDeptLookup(allDs);
         setProjects(ps);
-        setProjectId(ps[0]?.id ? String(ps[0].id) : '');
+        // If URL contains ?projectId=..., prefer it (used by PM dashboard modal/deeplink).
+        const urlProjectId = (() => {
+          try {
+            const usp = new URLSearchParams(window.location.search);
+            return (usp.get('projectId') || '').trim();
+          } catch {
+            return '';
+          }
+        })();
+        const exists = urlProjectId ? ps.some((p) => String(p.id) === String(urlProjectId)) : false;
+        setProjectId(exists ? String(urlProjectId) : ps[0]?.id ? String(ps[0].id) : '');
       } catch (e: any) {
         setError(e?.message || '載入失敗');
       }
