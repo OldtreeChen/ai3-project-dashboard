@@ -3,6 +3,8 @@ import { getEcpMapping, sqlId } from '@/lib/ecpSchema';
 import { getTaskReceivedAtColumn } from '@/lib/taskReceivedAt';
 import { getUserActiveFilter } from '@/lib/userActive';
 import { getTaskPlannedHoursColumn } from '@/lib/taskPlannedHours';
+import { getTaskPlannedEndAtColumn } from '@/lib/taskPlannedEndAt';
+import { getTaskPlannedStartAtColumn } from '@/lib/taskPlannedStartAt';
 import { parseIdParam } from '../../_utils';
 
 export const dynamic = 'force-dynamic';
@@ -33,6 +35,8 @@ export async function GET(req: Request) {
     const m = await getEcpMapping();
     const receivedAtCol = await getTaskReceivedAtColumn();
     const plannedHoursCol = await getTaskPlannedHoursColumn();
+    const plannedStartCol = await getTaskPlannedStartAtColumn();
+    const plannedEndCol = await getTaskPlannedEndAtColumn();
 
     const P = sqlId(m.tables.project);
     const T = sqlId(m.tables.task);
@@ -42,9 +46,13 @@ export async function GET(req: Request) {
 
     const tId = sqlId(m.task.id);
     const tProjectId = sqlId(m.task.projectId);
-    const tOwner = m.task.ownerUserId ? sqlId(m.task.ownerUserId) : null;
+    // 部門/人員任務：以「任務執行人」為準（不是任務下達人）
+    const tAssigneeRaw = m.task.executorUserId || m.task.ownerUserId;
+    const tAssignee = tAssigneeRaw ? sqlId(tAssigneeRaw) : null;
     const tPlanned = plannedHoursCol ? sqlId(plannedHoursCol) : (m.task.plannedHours ? sqlId(m.task.plannedHours) : null);
     const tReceivedAt = sqlId(receivedAtCol);
+    const tPlanStart = plannedStartCol ? sqlId(plannedStartCol) : null;
+    const tPlanEnd = plannedEndCol ? sqlId(plannedEndCol) : null;
 
     const trTaskId = sqlId(m.time.taskId);
     const trUserId = sqlId(m.time.userId);
@@ -57,9 +65,9 @@ export async function GET(req: Request) {
     const uName = sqlId(m.user.displayName);
     const uDeptId = m.user.departmentId ? sqlId(m.user.departmentId) : null;
 
-    if (!tOwner) {
+    if (!tAssignee) {
       return Response.json(
-        { error: 'task.ownerUserId is not mapped; please set ecp.columns.task.ownerUserId in config.json' },
+        { error: 'task.executorUserId/ownerUserId is not mapped; please set ecp.columns.task.executorUserId in config.json' },
         { status: 500 }
       );
     }
@@ -88,6 +96,13 @@ export async function GET(req: Request) {
       GROUP BY tr.${trTaskId}, tr.${trUserId}
     `;
 
+    // Month allocation rule:
+    // - task belongs to month if [start,end] overlaps [month.start, month.end)
+    // - planned hours allocated by day proportion: planned * overlapDays / totalDays
+    // Fallback: if planned start is missing, use receivedAt as start; if planned end missing, use receivedAt as end.
+    const startExpr = tPlanStart ? `COALESCE(t.${tPlanStart}, t.${tReceivedAt})` : `t.${tReceivedAt}`;
+    const endExpr = tPlanEnd ? `COALESCE(t.${tPlanEnd}, t.${tReceivedAt})` : `t.${tReceivedAt}`;
+
     let sql = `
       SELECT
         u.${uId} AS person_id,
@@ -101,11 +116,22 @@ export async function GET(req: Request) {
       LEFT JOIN (
         SELECT
           t.${tId} AS task_id,
-          t.${tOwner} AS person_id,
-          ${plannedExpr} AS planned_hours
+          t.${tAssignee} AS person_id,
+          (
+            ${plannedExpr} *
+            GREATEST(
+              DATEDIFF(
+                LEAST(DATE(${endExpr}), DATE_SUB(DATE(?), INTERVAL 1 DAY)),
+                GREATEST(DATE(${startExpr}), DATE(?))
+              ) + 1,
+              0
+            ) /
+            GREATEST(DATEDIFF(DATE(${endExpr}), DATE(${startExpr})) + 1, 1)
+          ) AS planned_hours
         FROM ${T} t
-        WHERE t.${tOwner} IS NOT NULL AND t.${tOwner} <> ''
-          AND t.${tReceivedAt} >= ? AND t.${tReceivedAt} < ?
+        WHERE t.${tAssignee} IS NOT NULL AND t.${tAssignee} <> ''
+          AND DATE(${startExpr}) < DATE(?)
+          AND DATE(${endExpr}) >= DATE(?)
       ) ti ON ti.person_id = u.${uId}
       LEFT JOIN (
         ${usedSql}
@@ -114,9 +140,10 @@ export async function GET(req: Request) {
     `;
 
     // placeholders order:
-    // 1-2: received task filter
-    // 3-4: used hours month filter (if enabled)
-    const args: Array<string> = [month.start, month.end];
+    // 1-2: month end/start for overlap calc (DATE_SUB needs end)
+    // 3-4: month end/start for overlap WHERE
+    // 5-6: used hours month filter (if enabled)
+    const args: Array<string> = [month.end, month.start, month.end, month.start];
     if (usedSql.includes('WHERE th.')) args.push(month.start, month.end);
     // 人員彙總：只列出 AI專案一部 / AI專案二部 的人員
     // - 若有指定 departmentId：直接用 id 過濾

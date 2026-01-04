@@ -3,6 +3,7 @@ import { getEcpMapping, sqlId } from '@/lib/ecpSchema';
 import { getTaskReceivedAtColumn } from '@/lib/taskReceivedAt';
 import { getTaskPlannedEndAtColumn } from '@/lib/taskPlannedEndAt';
 import { getTaskPlannedHoursColumn } from '@/lib/taskPlannedHours';
+import { getTaskPlannedStartAtColumn } from '@/lib/taskPlannedStartAt';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,6 +34,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ personId: strin
     const receivedAtCol = await getTaskReceivedAtColumn();
     const plannedEndCol = await getTaskPlannedEndAtColumn();
     const plannedHoursCol = await getTaskPlannedHoursColumn();
+    const plannedStartCol = await getTaskPlannedStartAtColumn();
 
     const P = sqlId(m.tables.project);
     const T = sqlId(m.tables.task);
@@ -46,11 +48,14 @@ export async function GET(req: Request, ctx: { params: Promise<{ personId: strin
     const tId = sqlId(m.task.id);
     const tProjectId = sqlId(m.task.projectId);
     const tName = sqlId(m.task.name);
-    const tOwner = m.task.ownerUserId ? sqlId(m.task.ownerUserId) : null;
+    // 部門/人員任務：以「任務執行人」為準（不是任務下達人）
+    const tAssigneeRaw = m.task.executorUserId || m.task.ownerUserId;
+    const tAssignee = tAssigneeRaw ? sqlId(tAssigneeRaw) : null;
     const tPlanned = plannedHoursCol ? sqlId(plannedHoursCol) : (m.task.plannedHours ? sqlId(m.task.plannedHours) : null);
     const tStatus = m.task.status ? sqlId(m.task.status) : null;
     const tReceivedAt = sqlId(receivedAtCol);
     const tPlannedEndAt = plannedEndCol ? sqlId(plannedEndCol) : null;
+    const tPlannedStartAt = plannedStartCol ? sqlId(plannedStartCol) : null;
     const tCompletedAt = m.task.completedAt ? sqlId(m.task.completedAt) : null;
 
     const trTaskId = sqlId(m.time.taskId);
@@ -60,14 +65,18 @@ export async function GET(req: Request, ctx: { params: Promise<{ personId: strin
     const thId = m.timeReport?.id ? sqlId(m.timeReport.id) : null;
     const thWorkDate = m.timeReport?.workDate ? sqlId(m.timeReport.workDate) : null;
 
-    if (!tOwner) {
+    if (!tAssignee) {
       return Response.json(
-        { error: 'task.ownerUserId is not mapped; please set ecp.columns.task.ownerUserId in config.json' },
+        { error: 'task.executorUserId/ownerUserId is not mapped; please set ecp.columns.task.executorUserId in config.json' },
         { status: 500 }
       );
     }
 
     const plannedExpr = tPlanned ? `COALESCE(t.${tPlanned}, 0)` : '0';
+
+    // Month allocation by overlap proportion (same as summary)
+    const startExpr = tPlannedStartAt ? `COALESCE(t.${tPlannedStartAt}, t.${tReceivedAt})` : `t.${tReceivedAt}`;
+    const endExpr = tPlannedEndAt ? `COALESCE(t.${tPlannedEndAt}, t.${tReceivedAt})` : `t.${tReceivedAt}`;
 
     const usedSql =
       TH && trTimeReportId && thId && thWorkDate
@@ -113,10 +122,21 @@ export async function GET(req: Request, ctx: { params: Promise<{ personId: strin
           t.${tReceivedAt} AS received_at,
           ${tPlannedEndAt ? `t.${tPlannedEndAt} AS planned_end_at,` : `NULL AS planned_end_at,`}
           ${tCompletedAt ? `t.${tCompletedAt} AS completed_at,` : `NULL AS completed_at,`}
-          ${plannedExpr} AS planned_hours
+          (
+            ${plannedExpr} *
+            GREATEST(
+              DATEDIFF(
+                LEAST(DATE(${endExpr}), DATE_SUB(DATE(?), INTERVAL 1 DAY)),
+                GREATEST(DATE(${startExpr}), DATE(?))
+              ) + 1,
+              0
+            ) /
+            GREATEST(DATEDIFF(DATE(${endExpr}), DATE(${startExpr})) + 1, 1)
+          ) AS planned_hours
         FROM ${T} t
-        WHERE t.${tOwner} = ?
-          AND t.${tReceivedAt} >= ? AND t.${tReceivedAt} < ?
+        WHERE t.${tAssignee} = ?
+          AND DATE(${startExpr}) < DATE(?)
+          AND DATE(${endExpr}) >= DATE(?)
       ) ti
       LEFT JOIN (
         ${usedSql}
@@ -125,7 +145,13 @@ export async function GET(req: Request, ctx: { params: Promise<{ personId: strin
       ORDER BY ti.received_at DESC, ti.task_id DESC
     `;
 
-    const args: any[] = [personId, month.start, month.end];
+    // args order must match SQL placeholders:
+    // 1-2: month end/start for overlap calc
+    // 3: personId
+    // 4-5: month end/start for overlap WHERE
+    // 6-7: used hours month filter (if enabled)
+    // last: personId for join
+    const args: any[] = [month.end, month.start, personId, month.end, month.start];
     if (usedSql.includes('WHERE th.')) args.push(month.start, month.end);
     args.push(personId);
 
