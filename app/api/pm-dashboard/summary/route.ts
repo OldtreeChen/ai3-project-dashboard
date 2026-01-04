@@ -12,6 +12,7 @@ export async function GET() {
     const P = sqlId(m.tables.project);
     const T = sqlId(m.tables.task);
     const U = sqlId(m.tables.user);
+    const D = m.tables.department ? sqlId(m.tables.department) : null;
 
     const pId = sqlId(m.project.id);
     const pName = sqlId(m.project.name);
@@ -27,6 +28,9 @@ export async function GET() {
 
     const uId = sqlId(m.user.id);
     const uName = sqlId(m.user.displayName);
+    const uDeptId = m.user.departmentId ? sqlId(m.user.departmentId) : null;
+    const dId = m.department?.id ? sqlId(m.department.id) : null;
+    const dName = m.department?.name ? sqlId(m.department.name) : null;
 
     if (!pOwner) return Response.json({ owners: [] });
 
@@ -61,6 +65,8 @@ export async function GET() {
         GROUP BY p.${pId}, p.${pOwner}
       ) x
       LEFT JOIN ${U} u ON u.${uId} = x.owner_id
+      ${D && dId && dName && uDeptId ? `LEFT JOIN ${D} d ON d.${dId} = u.${uDeptId}` : ''}
+      ${D && dId && dName && uDeptId ? `WHERE (d.${dName} LIKE '%AI專案一部%' OR d.${dName} LIKE '%AI專案二部%')` : ''}
       GROUP BY x.owner_id
       ORDER BY remaining_hours DESC, planned_hours DESC, owner_name ASC
     `;
