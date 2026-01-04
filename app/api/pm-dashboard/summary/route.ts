@@ -47,10 +47,10 @@ export async function GET(req: Request) {
     const plannedExpr = pPlanned ? `COALESCE(p.${pPlanned}, 0)` : '0';
     const usedExpr = tHours ? `COALESCE(SUM(t.${tHours}), 0)` : '0';
 
-    // PM 負載：計算「執行中」+「新增」專案（排除 已分配/成功關閉 等）
+    // PM 負載：計算「已分配/新增」+「執行中/逾期」專案（排除 成功關閉 等）
     // 注意：若直接 join task 會把 p.planHours 依 task 筆數重複加總，必須先 per-project 彙總再 per-owner 彙總。
     const executingFilter = pStatus
-      ? `AND p.${pStatus} IN ('New','Executing','ExecuteAuditing','ExecuteBack','Overdue','OverdueUpgrade')`
+      ? `AND p.${pStatus} IN ('Assigned','New','Executing','ExecuteAuditing','ExecuteBack','Overdue','OverdueUpgrade')`
       : '';
 
     const projectDeptFilter =
