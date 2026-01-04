@@ -41,6 +41,17 @@ type TaskRow = {
 
 type PeopleRow = { person_id: string | number; display_name: string; hours: number; task_count: number };
 
+type PendingProject = {
+  id: string | number;
+  code: string | null;
+  name: string;
+  planned_hours: number;
+  status: string;
+  status_zh?: string | null;
+  project_type?: string | null;
+  owner_name?: string | null;
+};
+
 function fmtHours(v: unknown) {
   const n = Number(v ?? 0);
   if (!Number.isFinite(n)) return '--';
@@ -76,6 +87,9 @@ export default function DashboardClient() {
   const [departments, setDepartments] = useState<Department[]>([]);
   const [people, setPeople] = useState<Person[]>([]);
   const [owners, setOwners] = useState<Owner[]>([]);
+  const [pendingProjects, setPendingProjects] = useState<PendingProject[]>([]);
+  const [pendingLoading, setPendingLoading] = useState(false);
+  const [pendingError, setPendingError] = useState('');
 
   const [projectId, setProjectId] = useState<string>('');
   const [departmentId, setDepartmentId] = useState<string>('');
@@ -107,6 +121,26 @@ export default function DashboardClient() {
       }
     })();
   }, []);
+
+  const refreshPendingProjects = async () => {
+    setPendingLoading(true);
+    setPendingError('');
+    try {
+      const q = buildQuery({ departmentId, ownerId, limit: 200 });
+      const data = await apiGet<{ projects: PendingProject[] }>(`/api/pending-projects${q}`);
+      setPendingProjects(data.projects || []);
+    } catch (e: any) {
+      setPendingError(e?.message || '載入新增/已分配專案失敗');
+      setPendingProjects([]);
+    } finally {
+      setPendingLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void refreshPendingProjects();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [departmentId, ownerId]);
 
   useEffect(() => {
     (async () => {
@@ -332,6 +366,71 @@ export default function DashboardClient() {
                 <span className="muted">負責人：</span>
                 {selectedProject?.owner_name || <span className="muted">--</span>}
               </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="panel" style={{ marginTop: 12 }}>
+          <div className="panel__header">
+            <div className="panel__title">新增 / 已分配（【AI】專案）</div>
+            <div className="panel__meta">
+              {pendingLoading
+                ? '載入中…'
+                : pendingError
+                  ? `錯誤：${pendingError}`
+                  : `${pendingProjects.length} 筆`}
+            </div>
+          </div>
+          <div className="panel__body">
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
+              <button className="btn" type="button" onClick={() => void refreshPendingProjects()} disabled={pendingLoading}>
+                重新整理
+              </button>
+            </div>
+            <div className="table-scroll">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>專案類型</th>
+                    <th>專案</th>
+                    <th>狀態</th>
+                    <th>負責人</th>
+                    <th className="num">預估</th>
+                    <th style={{ width: 84 }} />
+                  </tr>
+                </thead>
+                <tbody>
+                  {pendingProjects.length ? (
+                    pendingProjects.map((p) => (
+                      <tr key={String(p.id)}>
+                        <td>{p.project_type || <span className="muted">--</span>}</td>
+                        <td title={p.name}>{p.code ? `${p.code}｜${p.name}` : p.name}</td>
+                        <td>{p.status_zh || <span className="muted">{p.status}</span>}</td>
+                        <td>{p.owner_name || <span className="muted">--</span>}</td>
+                        <td className="num">{fmtHours(p.planned_hours)}</td>
+                        <td style={{ textAlign: 'right' }}>
+                          <button
+                            className="btn"
+                            type="button"
+                            onClick={() => {
+                              setProjectId(String(p.id));
+                              window.scrollTo({ top: 0, behavior: 'smooth' });
+                            }}
+                          >
+                            明細
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={6} className="muted">
+                        尚無資料
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
         </section>
