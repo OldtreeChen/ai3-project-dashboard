@@ -77,6 +77,15 @@ export default function PmDashboardClient() {
     [owners, selectedOwnerId]
   );
 
+  const totals = useMemo(() => {
+    const project_count = owners.reduce((acc, o) => acc + Number(o.project_count || 0), 0);
+    const planned_hours = owners.reduce((acc, o) => acc + Number(o.planned_hours || 0), 0);
+    const used_hours = owners.reduce((acc, o) => acc + Number(o.used_hours || 0), 0);
+    const remaining_hours = owners.reduce((acc, o) => acc + Number(o.remaining_hours || 0), 0);
+    const remaining_load_months = remaining_hours / 900;
+    return { project_count, planned_hours, used_hours, remaining_hours, remaining_load_months };
+  }, [owners]);
+
   useEffect(() => {
     (async () => {
       try {
@@ -245,6 +254,29 @@ export default function PmDashboardClient() {
             <div className="panel__meta">{loading ? '載入中…' : `${owners.length} 位`}</div>
           </div>
           <div className="panel__body">
+            <div className="summary-strip" style={{ marginBottom: 12 }}>
+              <div className="summary-strip__item">
+                <div className="summary-strip__label">專案數</div>
+                <div className="summary-strip__value">{Number(totals.project_count || 0)}</div>
+              </div>
+              <div className="summary-strip__item">
+                <div className="summary-strip__label">預估</div>
+                <div className="summary-strip__value">{fmtHours(totals.planned_hours)}h</div>
+              </div>
+              <div className="summary-strip__item">
+                <div className="summary-strip__label">已用</div>
+                <div className="summary-strip__value">{fmtHours(totals.used_hours)}h</div>
+              </div>
+              <div className="summary-strip__item">
+                <div className="summary-strip__label">剩餘</div>
+                <div className="summary-strip__value">{fmtHours(totals.remaining_hours)}h</div>
+              </div>
+              <div className="summary-strip__item">
+                <div className="summary-strip__label">剩餘負載（月）</div>
+                <div className="summary-strip__value">{fmtMonths(totals.remaining_load_months)}</div>
+              </div>
+            </div>
+
             <div className="table-scroll">
               <table className="table">
                 <thead>
