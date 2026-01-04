@@ -39,7 +39,6 @@ export async function GET(req: Request) {
   // apply whitelist (AI專案一部/二部)
   const { dept1Id, dept2Id } = await getAiDeptIds();
   const wl = buildWhitelistWhere({
-    uDeptId: uDeptId ? String(uDeptId) : null,
     uName: String(uName),
     uAccount: uAccount ? String(uAccount) : null,
     departmentId: departmentId || null,
@@ -49,10 +48,6 @@ export async function GET(req: Request) {
   sql += wl.where;
   args.push(...wl.args);
 
-  if (departmentId && uDeptId) {
-    sql += ` AND u.${uDeptId} = ?`;
-    args.push(departmentId);
-  }
   sql += ` ORDER BY u.${uName} ASC`;
 
   const rows = await prisma.$queryRawUnsafe<any[]>(sql, ...args);

@@ -131,19 +131,17 @@ export async function getAiDeptIds(): Promise<{ dept1Id: string | null; dept2Id:
 }
 
 export function buildWhitelistWhere(opts: {
-  uDeptId: string | null;
   uName: string; // sql identifier (may include backticks)
   uAccount: string | null;
   departmentId: string | null;
   dept1Id: string | null;
   dept2Id: string | null;
 }) {
-  const { uDeptId, uName, uAccount, departmentId, dept1Id, dept2Id } = opts;
-  if (!uDeptId) return { where: '', args: [] as any[] };
+  const { uName, uAccount, departmentId, dept1Id, dept2Id } = opts;
 
-  const addClause = (deptId: string, wl: DeptWhitelist) => {
-    const args: any[] = [deptId];
-    let cond = `(u.${uDeptId} = ? AND (`;
+  const addClause = (_deptId: string, wl: DeptWhitelist) => {
+    const args: any[] = [];
+    let cond = `(`;
     const parts: string[] = [];
 
     // Normalize display name: strip anything after "(" or "（"
@@ -164,7 +162,7 @@ export function buildWhitelistWhere(opts: {
     if (!parts.length) {
       parts.push('1=0');
     }
-    cond += parts.join(' OR ') + '))';
+    cond += parts.join(' OR ') + ')';
     return { cond, args };
   };
 

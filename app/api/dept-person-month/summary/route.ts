@@ -149,23 +149,6 @@ export async function GET(req: Request) {
     // 5-6: used hours month filter (if enabled)
     const args: Array<string> = [month.end, month.start, month.end, month.start];
     if (usedSql.includes('WHERE th.')) args.push(month.start, month.end);
-    // 人員彙總：只列出 AI專案一部 / AI專案二部 的人員
-    // - 若有指定 departmentId：直接用 id 過濾
-    // - 若沒指定：預設限制在 (AI專案一部/二部) 的部門 ID 集合
-    if (uDeptId) {
-      if (departmentId) {
-        sql += ` AND u.${uDeptId} = ?`;
-        args.push(departmentId);
-      } else if (m.tables.department && m.department?.id && m.department?.name) {
-        // (we already have D/dId/dName above, but keep logic self-contained)
-        const D2 = sqlId(m.tables.department);
-        const dId2 = sqlId(m.department.id);
-        const dName2 = sqlId(m.department.name);
-        sql += ` AND u.${uDeptId} IN (SELECT d.${dId2} FROM ${D2} d WHERE d.${dName2} LIKE ? OR d.${dName2} LIKE ?)`;
-        args.push('%AI專案一部%', '%AI專案二部%');
-      }
-    }
-
     // exclude system/service users + disabled/deleted users
     sql += ` AND u.${uName} NOT LIKE ? AND u.${uName} NOT LIKE ?`;
     args.push('%MidECP-User%', '%service_user%');
@@ -175,7 +158,6 @@ export async function GET(req: Request) {
     // apply whitelist (AI專案一部/二部) for dept/person tasks list
     const { dept1Id, dept2Id } = await getAiDeptIds();
     const wl = buildWhitelistWhere({
-      uDeptId: uDeptId ? String(uDeptId) : null,
       uName: String(uName),
       uAccount: uAccount ? String(uAccount) : null,
       departmentId: departmentId || null,
