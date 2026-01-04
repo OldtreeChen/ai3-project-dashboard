@@ -3,11 +3,16 @@ import { getEcpMapping, sqlId } from '@/lib/ecpSchema';
 import { getProjectTypeTextsByValues } from '@/lib/projectTypeDictionary';
 import { getProjectOwnerColumn } from '@/lib/projectOwner';
 import { getProjectTypeColumn } from '@/lib/projectType';
+import { parseIdParam } from '@/app/api/_utils';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    const url = new URL(req.url);
+    const departmentId = parseIdParam(url.searchParams.get('departmentId'));
+    const ownerId = parseIdParam(url.searchParams.get('ownerId'));
+
     const m = await getEcpMapping();
     const P = sqlId(m.tables.project);
     const T = sqlId(m.tables.task);
@@ -49,6 +54,9 @@ export async function GET() {
         ? `AND (dp.${dName} LIKE '%AI專案一部%' OR dp.${dName} LIKE '%AI專案二部%')`
         : '';
 
+    const args: Array<string> = [];
+    let outerWhere = 'WHERE 1=1';
+
     const sql = `
       SELECT
         x.owner_id AS owner_id,
@@ -74,12 +82,27 @@ export async function GET() {
       ) x
       LEFT JOIN ${U} u ON u.${uId} = x.owner_id
       ${D && dId && dName && uDeptId ? `LEFT JOIN ${D} d ON d.${dId} = u.${uDeptId}` : ''}
-      ${D && dId && dName && uDeptId ? `WHERE (d.${dName} LIKE '%AI專案一部%' OR d.${dName} LIKE '%AI專案二部%')` : ''}
+      ${(() => {
+        // owners must be from AI專案一部/二部 (by owner department name)
+        if (D && dId && dName && uDeptId) {
+          outerWhere += ` AND (d.${dName} LIKE ? OR d.${dName} LIKE ?)`;
+          args.push('%AI專案一部%', '%AI專案二部%');
+        }
+        if (departmentId && uDeptId) {
+          outerWhere += ` AND u.${uDeptId} = ?`;
+          args.push(departmentId);
+        }
+        if (ownerId) {
+          outerWhere += ` AND x.owner_id = ?`;
+          args.push(ownerId);
+        }
+        return outerWhere;
+      })()}
       GROUP BY x.owner_id
       ORDER BY remaining_hours DESC, planned_hours DESC, owner_name ASC
     `;
 
-    const rows = await prisma.$queryRawUnsafe<any[]>(sql);
+    const rows = await prisma.$queryRawUnsafe<any[]>(sql, ...args);
 
     // normalize BigInt/Decimal-ish values for JSON safety
     const owners = rows.map((r) => {

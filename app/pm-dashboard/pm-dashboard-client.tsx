@@ -15,6 +15,8 @@ type OwnerRow = {
   remaining_load_months: number;
 };
 
+type Department = { id: string | number; name: string };
+
 type ProjectRow = {
   id: string | number;
   code: string | null;
@@ -45,10 +47,25 @@ async function apiGet<T>(path: string): Promise<T> {
   return (await res.json()) as T;
 }
 
+function buildQuery(params: Record<string, string | number | null | undefined>) {
+  const usp = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) {
+    if (v === undefined || v === null || v === '') continue;
+    usp.set(k, String(v));
+  }
+  const s = usp.toString();
+  return s ? `?${s}` : '';
+}
+
 export default function PmDashboardClient() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [owners, setOwners] = useState<OwnerRow[]>([]);
+  const [ownerOptions, setOwnerOptions] = useState<OwnerRow[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
+
+  const [departmentId, setDepartmentId] = useState<string>('');
+  const [ownerFilterId, setOwnerFilterId] = useState<string>('');
 
   const [selectedOwnerId, setSelectedOwnerId] = useState<string>('');
   const [projectsLoading, setProjectsLoading] = useState(false);
@@ -62,11 +79,11 @@ export default function PmDashboardClient() {
 
   useEffect(() => {
     (async () => {
-      setLoading(true);
-      setError('');
       try {
-        const data = await apiGet<{ owners: OwnerRow[] }>('/api/pm-dashboard/summary');
-        setOwners(data.owners || []);
+        setLoading(true);
+        setError('');
+        const ds = await apiGet<Department[]>('/api/departments');
+        setDepartments(ds || []);
       } catch (e: any) {
         setError(e?.message || '載入失敗');
       } finally {
@@ -74,6 +91,52 @@ export default function PmDashboardClient() {
       }
     })();
   }, []);
+
+  // refresh owner dropdown options when department changes (options should remain selectable even when summary is filtered by ownerId)
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      setError('');
+      try {
+        const q = buildQuery({ departmentId });
+        const data = await apiGet<{ owners: OwnerRow[] }>(`/api/pm-dashboard/summary${q}`);
+        setOwnerOptions(data.owners || []);
+      } catch (e: any) {
+        setError(e?.message || '載入失敗');
+        setOwnerOptions([]);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [departmentId]);
+
+  // refresh summary whenever filters change
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      setError('');
+      try {
+        const q = buildQuery({ departmentId, ownerId: ownerFilterId });
+        const data = await apiGet<{ owners: OwnerRow[] }>(`/api/pm-dashboard/summary${q}`);
+        const nextOwners = data.owners || [];
+        setOwners(nextOwners);
+
+        // if current selection is not in the filtered summary, clear details
+        const stillExists = selectedOwnerId ? nextOwners.some((o) => String(o.owner_id) === String(selectedOwnerId)) : true;
+        if (!stillExists) {
+          setSelectedOwnerId('');
+          setProjects([]);
+          setProjectsError('');
+        }
+      } catch (e: any) {
+        setError(e?.message || '載入失敗');
+        setOwners([]);
+      } finally {
+        setLoading(false);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [departmentId, ownerFilterId]);
 
   const toggleOwner = async (ownerId: string) => {
     const next = String(ownerId);
@@ -112,9 +175,58 @@ export default function PmDashboardClient() {
     <div className="app">
       <header className="topbar">
         <div className="brand">
-          <div className="brand__title">PM 負載儀表板</div>
+          <div className="brand__title">PM 負載彙總表</div>
           <div className="brand__sub">以每月 900 小時產能估算剩餘負載（月）</div>
           <TopMenu />
+        </div>
+
+        <div className="filters filters--center">
+          <label className="field">
+            <span className="field__label">部門</span>
+            <select
+              className="field__control"
+              value={departmentId}
+              onChange={(e) => {
+                const v = e.target.value;
+                setDepartmentId(v);
+                // changing dept should reset owner filter + details
+                setOwnerFilterId('');
+                setSelectedOwnerId('');
+                setProjects([]);
+                setProjectsError('');
+              }}
+            >
+              <option value="">全部</option>
+              {departments.map((d) => (
+                <option key={String(d.id)} value={String(d.id)}>
+                  {d.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="field">
+            <span className="field__label">負責人</span>
+            <select
+              className="field__control"
+              value={ownerFilterId}
+              onChange={(e) => {
+                const v = e.target.value;
+                setOwnerFilterId(v);
+                // owner filter changes should reset details selection (avoid mismatch)
+                setSelectedOwnerId('');
+                setProjects([]);
+                setProjectsError('');
+              }}
+            >
+              <option value="">全部</option>
+              {ownerOptions.map((o) => (
+                <option key={String(o.owner_id)} value={String(o.owner_id)}>
+                  {o.owner_name}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
       </header>
 
@@ -129,7 +241,7 @@ export default function PmDashboardClient() {
 
         <section className="panel">
           <div className="panel__header">
-            <div className="panel__title">PM 彙總</div>
+            <div className="panel__title">PM 負載彙總</div>
             <div className="panel__meta">{loading ? '載入中…' : `${owners.length} 位`}</div>
           </div>
           <div className="panel__body">
