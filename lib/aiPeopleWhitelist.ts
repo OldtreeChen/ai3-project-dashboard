@@ -71,7 +71,7 @@ export const AI_DEPT_WHITELISTS: Record<'dept1' | 'dept2', DeptWhitelist> = {
       'xander.wang@ai3.cloud',
       'melody.lee@ai3.cloud',
       'chloe.wu@ai3.cloud',
-      'oldtree.chen@qibiai.com',
+      'oldtree.chen@qbiai.com',
       'jason.cheng@ai3.cloud',
       'brian.hsieh@ai3.cloud',
       'dennis.ting@ai3.cloud',
@@ -81,7 +81,6 @@ export const AI_DEPT_WHITELISTS: Record<'dept1' | 'dept2', DeptWhitelist> = {
       'mark.liao@ai3.cloud'
     ],
     names: [
-      '王社元',
       '王祉元',
       '吳詩瑀',
       '李吳孟修',
@@ -91,10 +90,10 @@ export const AI_DEPT_WHITELISTS: Record<'dept1' | 'dept2', DeptWhitelist> = {
       '陳慕霖-專案二部',
       '鄭傑丞',
       '謝政棋',
-      '丁啟韻',
+      '丁歆翰',
       '李偉誠',
-      '廖育璽',
-      '李駿亘',
+      '廖育霆',
+      '李騏亘',
       '廖明信'
     ]
   }
