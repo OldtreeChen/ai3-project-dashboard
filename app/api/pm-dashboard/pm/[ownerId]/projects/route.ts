@@ -32,6 +32,10 @@ export async function GET(_req: Request, ctx: { params: Promise<{ ownerId: strin
 
   const plannedExpr = pPlanned ? `COALESCE(p.${pPlanned}, 0)` : '0';
   const usedExpr = tHours ? `COALESCE(SUM(t.${tHours}), 0)` : '0';
+  const plannedAggExpr = pPlanned ? `MAX(COALESCE(p.${pPlanned}, 0))` : '0';
+  const executingFilter = pStatus
+    ? `AND p.${pStatus} IN ('Executing','ExecuteAuditing','ExecuteBack','Overdue','OverdueUpgrade')`
+    : '';
 
   const sql = `
     SELECT
@@ -40,15 +44,15 @@ export async function GET(_req: Request, ctx: { params: Promise<{ ownerId: strin
       p.${pName} AS name,
       ${pStatus ? `p.${pStatus} AS status,` : `NULL AS status,`}
       ${pType ? `p.${pType} AS project_type_raw,` : `NULL AS project_type_raw,`}
-      ${plannedExpr} AS planned_hours,
+      ${plannedAggExpr} AS planned_hours,
       ${usedExpr} AS used_hours,
-      (${plannedExpr} - ${usedExpr}) AS remaining_hours
+      (${plannedAggExpr} - ${usedExpr}) AS remaining_hours
     FROM ${P} p
     LEFT JOIN ${T} t ON t.${tProjectId} = p.${pId}
     WHERE p.${pOwner} = ?
       AND p.${pName} NOT LIKE '%新人%'
       AND p.${pName} LIKE '【AI】%'
-      ${pStatus ? `AND p.${pStatus} NOT IN ('New', 'Finished','FinishAuditing','Discarded','Cancel')` : ''}
+      ${executingFilter}
     GROUP BY p.${pId}
     ORDER BY remaining_hours DESC, planned_hours DESC, p.${pId} DESC
   `;

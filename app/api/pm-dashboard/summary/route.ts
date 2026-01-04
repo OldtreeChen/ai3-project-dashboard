@@ -33,21 +33,35 @@ export async function GET() {
     const plannedExpr = pPlanned ? `COALESCE(p.${pPlanned}, 0)` : '0';
     const usedExpr = tHours ? `COALESCE(SUM(t.${tHours}), 0)` : '0';
 
+    // PM 負載：僅計算「執行中」專案（排除 新增/已分配/成功關閉 等）
+    // 注意：若直接 join task 會把 p.planHours 依 task 筆數重複加總，必須先 per-project 彙總再 per-owner 彙總。
+    const executingFilter = pStatus
+      ? `AND p.${pStatus} IN ('Executing','ExecuteAuditing','ExecuteBack','Overdue','OverdueUpgrade')`
+      : '';
+
     const sql = `
       SELECT
-        p.${pOwner} AS owner_id,
+        x.owner_id AS owner_id,
         u.${uName} AS owner_name,
-        COUNT(DISTINCT p.${pId}) AS project_count,
-        COALESCE(SUM(${plannedExpr}), 0) AS planned_hours,
-        ${usedExpr} AS used_hours,
-        (COALESCE(SUM(${plannedExpr}), 0) - ${usedExpr}) AS remaining_hours
-      FROM ${P} p
-      LEFT JOIN ${U} u ON u.${uId} = p.${pOwner}
-      LEFT JOIN ${T} t ON t.${tProjectId} = p.${pId}
-      WHERE p.${pName} NOT LIKE '%新人%'
-        AND p.${pName} LIKE '【AI】%'
-        ${pStatus ? `AND p.${pStatus} NOT IN ('New', 'Finished','FinishAuditing','Discarded','Cancel')` : ''}
-      GROUP BY p.${pOwner}
+        COUNT(1) AS project_count,
+        COALESCE(SUM(x.planned_hours), 0) AS planned_hours,
+        COALESCE(SUM(x.used_hours), 0) AS used_hours,
+        COALESCE(SUM(x.planned_hours - x.used_hours), 0) AS remaining_hours
+      FROM (
+        SELECT
+          p.${pId} AS project_id,
+          p.${pOwner} AS owner_id,
+          ${plannedExpr} AS planned_hours,
+          ${usedExpr} AS used_hours
+        FROM ${P} p
+        LEFT JOIN ${T} t ON t.${tProjectId} = p.${pId}
+        WHERE p.${pName} NOT LIKE '%新人%'
+          AND p.${pName} LIKE '【AI】%'
+          ${executingFilter}
+        GROUP BY p.${pId}, p.${pOwner}
+      ) x
+      LEFT JOIN ${U} u ON u.${uId} = x.owner_id
+      GROUP BY x.owner_id
       ORDER BY remaining_hours DESC, planned_hours DESC, owner_name ASC
     `;
 
