@@ -11,6 +11,7 @@ type Project = {
   planned_hours: number;
   start_date: string | null;
   end_date: string | null;
+  planned_end_date?: string | null;
   actual_hours: number;
   status?: string | null;
   status_zh?: string | null;
@@ -196,6 +197,13 @@ export default function DashboardClient() {
     () => (projectId ? projects.find((p) => String(p.id) === String(projectId)) || null : null),
     [projects, projectId]
   );
+  const plannedEndInfo = useMemo(() => {
+    const raw = selectedProject?.planned_end_date || null;
+    if (!raw) return { text: null as string | null, overdue: false };
+    const d = new Date(raw);
+    const overdue = Number.isFinite(d.getTime()) ? d.getTime() < Date.now() : false;
+    return { text: fmtDateTime(raw), overdue };
+  }, [selectedProject?.planned_end_date]);
   const selectedDepartmentName = useMemo(() => {
     if (!selectedProject?.department_id) return null;
     const hit = departments.find((d) => String(d.id) === String(selectedProject.department_id));
@@ -232,7 +240,7 @@ export default function DashboardClient() {
     <div className="app">
       <header className="topbar">
         <div className="brand">
-          <div className="brand__title">各專案工時明細表</div>
+          <div className="brand__title">各專案任務工時明細表</div>
           <div className="brand__sub">任務實際時數以任務本身為準（任務加總＝專案已填報時數）</div>
           <TopMenu />
         </div>
@@ -323,6 +331,17 @@ export default function DashboardClient() {
               <div>
                 <span className="muted">部門：</span>
                 {selectedDepartmentName || <span className="muted">--</span>}
+              </div>
+              <div>
+                <span className="muted">計畫結束：</span>
+                {plannedEndInfo.text ? (
+                  <span>
+                    {plannedEndInfo.text}{' '}
+                    {plannedEndInfo.overdue ? <span className="badge badge--bad">逾期</span> : null}
+                  </span>
+                ) : (
+                  <span className="muted">--</span>
+                )}
               </div>
               <div>
                 <span className="muted">狀態：</span>

@@ -4,6 +4,7 @@ import { getProjectTypeTextsByValues } from '@/lib/projectTypeDictionary';
 import { getProjectStatusTextsByValues } from '@/lib/projectStatusDictionary';
 import { getProjectOwnerColumn } from '@/lib/projectOwner';
 import { getProjectTypeColumn } from '@/lib/projectType';
+import { getProjectPlannedEndAtColumn } from '@/lib/projectPlannedEndAt';
 import { parseIdParam, parseIntParam } from '../_utils';
 
 export const dynamic = 'force-dynamic';
@@ -34,6 +35,8 @@ export async function GET(req: Request) {
   const pPlanned = pIf(m.project.plannedHours);
   const pStart = pIf(m.project.startDate);
   const pEnd = pIf(m.project.endDate);
+  const plannedEndCol = await getProjectPlannedEndAtColumn();
+  const pPlannedEnd = plannedEndCol && pSet.has(plannedEndCol) ? sqlId(plannedEndCol) : null;
   const pStatus = pIf(m.project.status);
   const pDeptId = pIf(m.project.departmentId);
   const ownerCol = await getProjectOwnerColumn();
@@ -95,6 +98,7 @@ export async function GET(req: Request) {
       ${plannedExpr} AS planned_hours,
       ${pStart ? `p.${pStart} AS start_date,` : `NULL AS start_date,`}
       ${pEnd ? `p.${pEnd} AS end_date,` : `NULL AS end_date,`}
+      ${pPlannedEnd ? `p.${pPlannedEnd} AS planned_end_date,` : `NULL AS planned_end_date,`}
       ${pStatus ? `p.${pStatus} AS status,` : `NULL AS status,`}
       ${pDeptId ? `p.${pDeptId} AS department_id,` : `NULL AS department_id,`}
       ${pOwner ? `p.${pOwner} AS owner_user_id,` : `NULL AS owner_user_id,`}
