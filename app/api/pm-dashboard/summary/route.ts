@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { getEcpMapping, sqlId } from '@/lib/ecpSchema';
-import { getDictionaryTextsByValues } from '@/lib/dictionary';
+import { getProjectTypeTextsByValues } from '@/lib/projectTypeDictionary';
 import { getProjectOwnerColumn } from '@/lib/projectOwner';
 import { getProjectTypeColumn } from '@/lib/projectType';
 
@@ -81,7 +81,7 @@ export async function GET() {
           )
         )
       : [];
-    const dict = await getDictionaryTextsByValues(typeValues);
+    const dict = await getProjectTypeTextsByValues(typeValues);
 
     return Response.json({ owners, project_type_map: Object.fromEntries(dict.entries()) });
   } catch (err: any) {

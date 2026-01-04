@@ -56,7 +56,7 @@ export async function GET(req: Request) {
   if (D && dId && dName && uDeptId) {
     joinDept = `LEFT JOIN ${D} d ON d.${dId} = u.${uDeptId}`;
     where += ` AND (d.${dName} LIKE ? OR d.${dName} LIKE ?)`;
-    args.push('%專案一部%', '%專案二部%');
+    args.push('%AI專案一部%', '%AI專案二部%');
   }
 
   const sql = `

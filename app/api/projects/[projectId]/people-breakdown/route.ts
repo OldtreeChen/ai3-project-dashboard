@@ -50,10 +50,17 @@ export async function GET(req: Request, ctx: { params: Promise<{ projectId: stri
 
   const people = await prisma.$queryRawUnsafe<any[]>(sql, ...args);
 
+  // normalize BigInt/Decimal-ish values for JSON safety
+  const normalized = (people || []).map((r) => ({
+    ...r,
+    hours: Number(r.hours || 0),
+    task_count: Number(r.task_count || 0)
+  }));
+
   return Response.json({
     date_filter: from && to ? { from, to } : null,
     filters: { personId: personId || null, departmentId: departmentId || null },
-    people
+    people: normalized
   });
 }
 

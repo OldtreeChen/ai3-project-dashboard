@@ -17,7 +17,9 @@ export async function GET() {
         d.${dId} AS id,
         d.${dName} AS name
       FROM ${D} d
-      WHERE d.${dName} LIKE '%專案一部%' OR d.${dName} LIKE '%專案二部%'
+      WHERE d.${dName} IN ('AI專案一部', 'AI專案二部')
+         OR d.${dName} LIKE '%AI專案一部%'
+         OR d.${dName} LIKE '%AI專案二部%'
       ORDER BY d.${dName} ASC
     `;
     const rows = await prisma.$queryRawUnsafe<any[]>(sql);
