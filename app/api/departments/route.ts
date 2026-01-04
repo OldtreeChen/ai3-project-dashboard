@@ -3,7 +3,9 @@ import { getEcpMapping, sqlId } from '@/lib/ecpSchema';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(req: Request) {
+  const url = new URL(req.url);
+  const all = url.searchParams.get('all') === '1';
   const m = await getEcpMapping();
   
   // Use department table if available
@@ -12,6 +14,19 @@ export async function GET() {
     const dId = sqlId(m.department.id);
     const dName = sqlId(m.department.name);
     
+    if (all) {
+      const sql = `
+        SELECT DISTINCT
+          d.${dId} AS id,
+          d.${dName} AS name
+        FROM ${D} d
+        WHERE d.${dId} IS NOT NULL AND d.${dId} <> ''
+        ORDER BY d.${dName} ASC
+      `;
+      const rows = await prisma.$queryRawUnsafe<any[]>(sql);
+      return Response.json(rows);
+    }
+
     const sql = `
       SELECT DISTINCT
         d.${dId} AS id,

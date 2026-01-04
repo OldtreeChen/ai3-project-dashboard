@@ -75,6 +75,7 @@ async function apiGet<T>(path: string): Promise<T> {
 export default function DashboardClient() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
+  const [deptLookup, setDeptLookup] = useState<Department[]>([]);
   const [people, setPeople] = useState<Person[]>([]);
   const [owners, setOwners] = useState<Owner[]>([]);
 
@@ -99,8 +100,13 @@ export default function DashboardClient() {
     (async () => {
       try {
         setError('');
-        const [ps, ds] = await Promise.all([apiGet<Project[]>('/api/projects'), apiGet<Department[]>('/api/departments')]);
+        const [ps, ds, allDs] = await Promise.all([
+          apiGet<Project[]>('/api/projects'),
+          apiGet<Department[]>('/api/departments'),
+          apiGet<Department[]>('/api/departments?all=1')
+        ]);
         setDepartments(ds);
+        setDeptLookup(allDs);
         setProjects(ps);
         setProjectId(ps[0]?.id ? String(ps[0].id) : '');
       } catch (e: any) {
@@ -189,6 +195,7 @@ export default function DashboardClient() {
   const planned = Number(summary?.planned_hours || 0);
   const actual = Number(summary?.actual_hours || 0);
   const diff = planned - actual;
+  const isOverBudget = diff < 0;
 
   const peopleRows: PeopleRow[] = (peopleBreakdown?.people || []) as any;
   const taskRows: TaskRow[] = (tasksBreakdown?.tasks || []) as any;
@@ -206,9 +213,10 @@ export default function DashboardClient() {
   }, [selectedProject?.planned_end_date]);
   const selectedDepartmentName = useMemo(() => {
     if (!selectedProject?.department_id) return null;
-    const hit = departments.find((d) => String(d.id) === String(selectedProject.department_id));
+    const source = deptLookup.length ? deptLookup : departments;
+    const hit = source.find((d) => String(d.id) === String(selectedProject.department_id));
     return hit?.name || null;
-  }, [departments, selectedProject?.department_id]);
+  }, [departments, deptLookup, selectedProject?.department_id]);
 
   const selectedPerson = useMemo(
     () => (selectedPersonId ? peopleRows.find((r) => String(r.person_id) === String(selectedPersonId)) : null),
@@ -323,7 +331,13 @@ export default function DashboardClient() {
           </div>
           <div className="card">
             <div className="card__label">剩餘 / 超支</div>
-            <div className="card__value">{fmtHours(Math.abs(diff))} h</div>
+            <div className="card__value">
+              {isOverBudget ? (
+                <span className="badge badge--bad">超支 {fmtHours(Math.abs(diff))}h</span>
+              ) : (
+                <span className="badge badge--good">剩餘 {fmtHours(diff)}h</span>
+              )}
+            </div>
           </div>
           <div className="card">
             <div className="card__label">專案資訊</div>
