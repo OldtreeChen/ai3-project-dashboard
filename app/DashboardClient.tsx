@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import TopMenu from './_components/TopMenu';
 import { toZhStatus } from '@/lib/statusText';
 
@@ -72,6 +72,15 @@ async function apiGet<T>(path: string): Promise<T> {
   return (await res.json()) as T;
 }
 
+function getUrlProjectId(): string {
+  try {
+    const usp = new URLSearchParams(window.location.search);
+    return (usp.get('projectId') || '').trim();
+  } catch {
+    return '';
+  }
+}
+
 export default function DashboardClient() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
@@ -96,6 +105,8 @@ export default function DashboardClient() {
   const [personTasksError, setPersonTasksError] = useState('');
   const [personTasks, setPersonTasks] = useState<TaskRow[]>([]);
 
+  const didInitRef = useRef(false);
+
   useEffect(() => {
     (async () => {
       try {
@@ -109,16 +120,10 @@ export default function DashboardClient() {
         setDeptLookup(allDs);
         setProjects(ps);
         // If URL contains ?projectId=..., prefer it (used by PM dashboard modal/deeplink).
-        const urlProjectId = (() => {
-          try {
-            const usp = new URLSearchParams(window.location.search);
-            return (usp.get('projectId') || '').trim();
-          } catch {
-            return '';
-          }
-        })();
+        const urlProjectId = getUrlProjectId();
         const exists = urlProjectId ? ps.some((p) => String(p.id) === String(urlProjectId)) : false;
         setProjectId(exists ? String(urlProjectId) : ps[0]?.id ? String(ps[0].id) : '');
+        didInitRef.current = true;
       } catch (e: any) {
         setError(e?.message || '載入失敗');
       }
@@ -163,15 +168,23 @@ export default function DashboardClient() {
       setError('');
       const ps = await loadProjects({ useFallbackFromOwner: true });
       setProjects(ps);
-      // keep selection if still exists
-      const exists = ps.some((p) => String(p.id) === String(projectId));
-      if (!exists) setProjectId(ps[0]?.id ? String(ps[0].id) : '');
+      // keep selection if still exists; otherwise prefer URL ?projectId=...; otherwise pick first project.
+      // Use functional update to avoid race conditions during initial load.
+      setProjectId((prev) => {
+        const prevId = String(prev || '').trim();
+        if (prevId && ps.some((p) => String(p.id) === prevId)) return prevId;
+        const urlProjectId = getUrlProjectId();
+        if (urlProjectId && ps.some((p) => String(p.id) === String(urlProjectId))) return String(urlProjectId);
+        return ps[0]?.id ? String(ps[0].id) : '';
+      });
     } catch (e: any) {
       setError(e?.message || '載入專案失敗');
     }
   };
 
   useEffect(() => {
+    // Avoid firing filter refresh before initial list is ready; prevents UI flash / selection resets.
+    if (!didInitRef.current) return;
     void refreshProjects();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [departmentId, ownerId]);

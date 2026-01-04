@@ -138,6 +138,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ personId: strin
         ${usedSql}
       ) us ON us.task_id = ti.task_id AND us.person_id = ?
       LEFT JOIN ${P} p ON p.${pId} = ti.project_id
+      WHERE p.${pName} NOT LIKE ?
       ORDER BY ti.received_at DESC, ti.task_id DESC
     `;
 
@@ -153,7 +154,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ personId: strin
     // 4-5: overlap WHERE
     // 6-7: used hours month filter
     // 8: personId for join
-    const args: any[] = [month.end, month.start, personId, month.end, month.start, month.start, month.end, personId];
+    const args: any[] = [month.end, month.start, personId, month.end, month.start, month.start, month.end, personId, '%新人%'];
 
     const tasks = await prisma.$queryRawUnsafe<any[]>(sql, ...args);
 

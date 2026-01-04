@@ -69,6 +69,9 @@ export async function GET(req: Request) {
     const uAccount = m.user.account ? sqlId(m.user.account) : null;
     const uDeptId = m.user.departmentId ? sqlId(m.user.departmentId) : null;
 
+    const pId = sqlId(m.project.id);
+    const pName = sqlId(m.project.name);
+
     if (!tAssignee) {
       return Response.json(
         { error: 'task.executorUserId/ownerUserId is not mapped; please set ecp.columns.task.executorUserId in config.json' },
@@ -126,8 +129,10 @@ export async function GET(req: Request) {
             GREATEST(DATEDIFF(DATE(${endExpr}), DATE(${startExpr})) + 1, 1)
           ) AS planned_hours
         FROM ${T} t
+        LEFT JOIN ${P} p ON p.${pId} = t.${tProjectId}
         WHERE t.${tAssignee} IS NOT NULL AND t.${tAssignee} <> ''
           ${tStatus ? `AND (t.${tStatus} IS NULL OR t.${tStatus} NOT IN ('Finished','Discarded','Cancel'))` : ''}
+          AND p.${pName} NOT LIKE ?
           AND DATE(${startExpr}) < DATE(?)
           AND DATE(${endExpr}) >= DATE(?)
       ) ti ON ti.person_id = u.${uId}
@@ -141,7 +146,12 @@ export async function GET(req: Request) {
     // 1-2: planned overlap calc
     // 3-4: overlap WHERE
     // 5-6: used hours month filter
-    const args: Array<string> = [month.end, month.start, month.end, month.start, month.start, month.end];
+    // placeholders order:
+    // 1-2: planned overlap calc
+    // 3: exclude newbie projects (p.name NOT LIKE)
+    // 4-5: overlap WHERE
+    // 6-7: used hours month filter
+    const args: Array<string> = [month.end, month.start, '%新人%', month.end, month.start, month.start, month.end];
     // exclude system/service users + disabled/deleted users
     sql += ` AND u.${uName} NOT LIKE ? AND u.${uName} NOT LIKE ?`;
     args.push('%MidECP-User%', '%service_user%');
