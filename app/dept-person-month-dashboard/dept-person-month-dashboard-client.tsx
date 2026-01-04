@@ -171,8 +171,10 @@ export default function DeptPersonMonthDashboardClient() {
           <div className="brand__sub">依「接收任務月份」篩選，統計每人：接收總時數 / 已執行 / 剩餘</div>
           <TopMenu />
         </div>
+      </header>
 
-        <div className="filters">
+      <main className="content">
+        <div className="filters filters--center" style={{ marginBottom: 12 }}>
           <label className="field">
             <span className="field__label">部門</span>
             <select className="field__control" value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}>
@@ -193,9 +195,7 @@ export default function DeptPersonMonthDashboardClient() {
             {loading ? '查詢中…' : '重新整理'}
           </button>
         </div>
-      </header>
 
-      <main className="content">
         {error ? (
           <section className="panel" style={{ marginBottom: 12 }}>
             <div className="panel__body">

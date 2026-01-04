@@ -69,8 +69,10 @@ export default function SchemaPage() {
           <div className="brand__sub">從既有 MariaDB 表找出「專案 / 任務 / 工時 / 員工」候選</div>
           <TopMenu />
         </div>
+      </header>
 
-        <div className="filters">
+      <main className="content">
+        <div className="filters filters--center" style={{ marginBottom: 12 }}>
           <label className="field" style={{ minWidth: 520 }}>
             <span className="field__label">關鍵字（逗號分隔）</span>
             <input className="field__control" value={q} onChange={(e) => setQ(e.target.value)} />
@@ -82,9 +84,7 @@ export default function SchemaPage() {
             回 Dashboard
           </a>
         </div>
-      </header>
 
-      <main className="content">
         {error ? (
           <section className="panel" style={{ marginBottom: 12 }}>
             <div className="panel__body">

@@ -252,8 +252,10 @@ export default function DashboardClient() {
           <div className="brand__sub">任務實際時數以任務本身為準（任務加總＝專案已填報時數）</div>
           <TopMenu />
         </div>
+      </header>
 
-        <div className="filters filters--center">
+      <main className="content">
+        <div className="filters filters--center" style={{ marginBottom: 12 }}>
           <label className="field">
             <span className="field__label">部門</span>
             <select className="field__control" value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}>
@@ -309,9 +311,7 @@ export default function DashboardClient() {
             </button>
           </div>
         </div>
-      </header>
 
-      <main className="content">
         {error ? (
           <div className="panel" style={{ marginBottom: 12 }}>
             <div className="panel__body">

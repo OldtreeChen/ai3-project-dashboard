@@ -179,8 +179,10 @@ export default function PmDashboardClient() {
           <div className="brand__sub">以每月 900 小時產能估算剩餘負載（月）</div>
           <TopMenu />
         </div>
+      </header>
 
-        <div className="filters filters--center">
+      <main className="content">
+        <div className="filters filters--center" style={{ marginBottom: 12 }}>
           <label className="field">
             <span className="field__label">部門</span>
             <select
@@ -228,9 +230,7 @@ export default function PmDashboardClient() {
             </select>
           </label>
         </div>
-      </header>
 
-      <main className="content">
         {error ? (
           <section className="panel" style={{ marginBottom: 12 }}>
             <div className="panel__body">

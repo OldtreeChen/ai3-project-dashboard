@@ -37,23 +37,10 @@ body{
   background: rgba(11,18,32,0.55);
   border-bottom: 1px solid var(--border);
   padding: 18px 22px;
-  /* Keep menu/brand on the left and center the filters at the top */
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  column-gap: 18px;
-  align-items: end;
-}
-.topbar::after{
-  content: "";
-}
-.topbar > .brand{
-  grid-column: 1;
-  justify-self: start;
-}
-.topbar > .filters{
-  grid-column: 2;
-  justify-self: center;
-  justify-content: center;
+  /* Top area only: title + description. Query filters live in page content. */
+  display:flex;
+  align-items: flex-start;
+  justify-content: space-between;
 }
 
 .brand__title{
@@ -95,7 +82,7 @@ body{
   gap: 10px;
   position: fixed;
   left: 16px;
-  top: 92px; /* below sticky topbar */
+  top: 84px; /* below sticky topbar */
   width: var(--sidebar-w);
   z-index: 9;
 }

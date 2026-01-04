@@ -137,8 +137,10 @@ export default function PeopleDashboardClient() {
           <div className="brand__sub">依查詢區間彙總每人填報工時，點選可查看任務與專案</div>
           <TopMenu />
         </div>
+      </header>
 
-        <div className="filters">
+      <main className="content">
+        <div className="filters filters--center" style={{ marginBottom: 12 }}>
           <label className="field">
             <span className="field__label">部門</span>
             <select className="field__control" value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}>
@@ -162,9 +164,7 @@ export default function PeopleDashboardClient() {
             {loading ? '查詢中…' : '查詢'}
           </button>
         </div>
-      </header>
 
-      <main className="content">
         {error ? (
           <section className="panel" style={{ marginBottom: 12 }}>
             <div className="panel__body">
