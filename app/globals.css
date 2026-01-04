@@ -303,7 +303,8 @@ body{
 .task-table{
   table-layout: fixed;
   width: 100%;
-  min-width: 1120px; /* allow horizontal scroll on narrow view */
+  /* Wider min-width so fixed columns (numbers + dates) don't squeeze/overlap */
+  min-width: 1320px; /* allow horizontal scroll on narrow view */
 }
 .task-table th, .task-table td{
   white-space: nowrap;
@@ -316,21 +317,26 @@ body{
   text-overflow: ellipsis;
 }
 
-/* Task table: wider description + reasonable executor/status widths */
-.task-table th:nth-child(1),
-.task-table td:nth-child(1){
-  width: 42%;
-}
+/* Task table: lock down column widths to prevent "預/實/剩/日期" from squeezing together.
+   Column order (DashboardClient): 1描述 2執行人 3狀態 4預估 5實際 6剩餘 7預計結束 8實際完成 */
 .task-table th:nth-child(2),
 .task-table td:nth-child(2){
-  width: 12%;
+  width: 130px;
 }
 .task-table th:nth-child(3),
 .task-table td:nth-child(3){
-  width: 10%;
+  width: 120px;
 }
-
-/* Task table: date columns should be wide enough to avoid overlap */
+.task-table th:nth-child(4),
+.task-table td:nth-child(4),
+.task-table th:nth-child(5),
+.task-table td:nth-child(5){
+  width: 84px;
+}
+.task-table th:nth-child(6),
+.task-table td:nth-child(6){
+  width: 110px;
+}
 .task-table th:nth-child(7),
 .task-table td:nth-child(7),
 .task-table th:nth-child(8),
