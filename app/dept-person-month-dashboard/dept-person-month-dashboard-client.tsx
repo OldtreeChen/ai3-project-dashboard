@@ -47,6 +47,22 @@ function fmtDateTime(v: unknown) {
   return s;
 }
 
+function getWorkdaysInMonth(monthValue: string) {
+  const m = String(monthValue || '').trim().match(/^(\d{4})-(\d{2})$/);
+  if (!m) return 0;
+  const yyyy = Number(m[1]);
+  const mm = Number(m[2]); // 1-12
+  if (!Number.isFinite(yyyy) || !Number.isFinite(mm) || mm < 1 || mm > 12) return 0;
+  const daysInMonth = new Date(yyyy, mm, 0).getDate();
+  let workdays = 0;
+  for (let d = 1; d <= daysInMonth; d++) {
+    const day = new Date(yyyy, mm - 1, d).getDay(); // 0 Sun ... 6 Sat
+    if (day === 0 || day === 6) continue;
+    workdays++;
+  }
+  return workdays;
+}
+
 function toMonthValue(d = new Date()) {
   const yyyy = d.getFullYear();
   const mm = String(d.getMonth() + 1).padStart(2, '0');
@@ -83,6 +99,10 @@ export default function DeptPersonMonthDashboardClient() {
   const [tasksLoading, setTasksLoading] = useState(false);
   const [tasksError, setTasksError] = useState('');
   const [tasks, setTasks] = useState<TaskRow[]>([]);
+
+  // 每月應完成工時：上班日 * 8 小時 * 0.8
+  const workdays = useMemo(() => getWorkdaysInMonth(month), [month]);
+  const expectedHours = useMemo(() => workdays * 8 * 0.8, [workdays]);
 
   const selectedPerson = useMemo(() => {
     if (!selectedPersonId) return null;
@@ -194,6 +214,9 @@ export default function DeptPersonMonthDashboardClient() {
           <button className="btn btn--primary" onClick={() => void loadSummary()} disabled={loading}>
             {loading ? '查詢中…' : '重新整理'}
           </button>
+          <span className="badge" style={{ marginLeft: 6 }}>
+            上班日 {workdays} 天｜應完成 {fmtHours(expectedHours)}h
+          </span>
         </div>
 
         {error ? (
@@ -216,7 +239,9 @@ export default function DeptPersonMonthDashboardClient() {
                   <tr>
                     <th>人員</th>
                     <th className="num">任務數</th>
+                    <th className="num">應完成工時</th>
                     <th className="num">接收總時數</th>
+                    <th className="num">任務缺口</th>
                     <th className="num">已執行</th>
                     <th className="num">剩餘</th>
                     <th style={{ width: 84 }} />
@@ -226,11 +251,20 @@ export default function DeptPersonMonthDashboardClient() {
                   {rows.length ? (
                     rows.map((r) => {
                       const isSelected = selectedPersonId && String(r.person_id) === String(selectedPersonId);
+                      const gap = expectedHours - Number(r.received_total_hours || 0);
                       return (
                         <tr key={String(r.person_id)} style={isSelected ? { background: 'rgba(96,165,250,0.10)' } : undefined}>
                           <td>{r.display_name}</td>
                           <td className="num">{Number(r.task_count || 0)}</td>
+                          <td className="num">{fmtHours(expectedHours)}</td>
                           <td className="num">{fmtHours(r.received_total_hours)}</td>
+                          <td className="num">
+                            {gap > 0 ? (
+                              <span className="badge badge--warn">缺 {fmtHours(gap)}h</span>
+                            ) : (
+                              <span className="badge badge--good">已足夠</span>
+                            )}
+                          </td>
                           <td className="num">{fmtHours(r.used_hours)}</td>
                           <td className="num">{fmtHours(r.remaining_hours)}</td>
                           <td style={{ textAlign: 'right' }}>
@@ -243,7 +277,7 @@ export default function DeptPersonMonthDashboardClient() {
                     })
                   ) : (
                     <tr>
-                      <td colSpan={6} className="muted">
+                      <td colSpan={8} className="muted">
                         尚無資料
                       </td>
                     </tr>

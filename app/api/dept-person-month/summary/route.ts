@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma';
 import { getEcpMapping, sqlId } from '@/lib/ecpSchema';
 import { getTaskReceivedAtColumn } from '@/lib/taskReceivedAt';
 import { getUserActiveFilter } from '@/lib/userActive';
+import { getTaskPlannedHoursColumn } from '@/lib/taskPlannedHours';
 import { parseIdParam } from '../../_utils';
 
 export const dynamic = 'force-dynamic';
@@ -31,6 +32,7 @@ export async function GET(req: Request) {
 
     const m = await getEcpMapping();
     const receivedAtCol = await getTaskReceivedAtColumn();
+    const plannedHoursCol = await getTaskPlannedHoursColumn();
 
     const P = sqlId(m.tables.project);
     const T = sqlId(m.tables.task);
@@ -41,7 +43,7 @@ export async function GET(req: Request) {
     const tId = sqlId(m.task.id);
     const tProjectId = sqlId(m.task.projectId);
     const tOwner = m.task.ownerUserId ? sqlId(m.task.ownerUserId) : null;
-    const tPlanned = m.task.plannedHours ? sqlId(m.task.plannedHours) : null;
+    const tPlanned = plannedHoursCol ? sqlId(plannedHoursCol) : (m.task.plannedHours ? sqlId(m.task.plannedHours) : null);
     const tReceivedAt = sqlId(receivedAtCol);
 
     const trTaskId = sqlId(m.time.taskId);
