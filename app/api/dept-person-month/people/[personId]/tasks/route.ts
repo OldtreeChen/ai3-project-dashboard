@@ -79,6 +79,21 @@ export async function GET(req: Request, ctx: { params: Promise<{ personId: strin
     const startExpr = tPlannedStartAt ? `COALESCE(t.${tPlannedStartAt}, t.${tReceivedAt})` : `t.${tReceivedAt}`;
     const endExpr = tPlannedEndAt ? `COALESCE(t.${tPlannedEndAt}, t.${tReceivedAt})` : `t.${tReceivedAt}`;
 
+    // executed hours from time logs (month-scoped)
+    if (!(TH && trTimeReportId && thId && thWorkDate)) {
+      return Response.json({ error: 'timeReport/timeDetail mapping missing (need timeReportId + workDate)' }, { status: 500 });
+    }
+    const usedSql = `
+      SELECT
+        tr.${trTaskId} AS task_id,
+        tr.${trUserId} AS person_id,
+        COALESCE(SUM(tr.${trHours}), 0) AS used_hours
+      FROM ${TR} tr
+      LEFT JOIN ${TH} th ON th.${thId} = tr.${trTimeReportId}
+      WHERE th.${thWorkDate} >= ? AND th.${thWorkDate} < ?
+      GROUP BY tr.${trTaskId}, tr.${trUserId}
+    `;
+
     const sql = `
       SELECT
         ti.task_id,
@@ -88,8 +103,8 @@ export async function GET(req: Request, ctx: { params: Promise<{ personId: strin
         ti.planned_hours,
         ti.planned_end_at,
         ti.completed_at,
-        ti.used_hours,
-        (ti.planned_hours - ti.used_hours) AS remaining_hours,
+        COALESCE(us.used_hours, 0) AS used_hours,
+        (ti.planned_hours - COALESCE(us.used_hours, 0)) AS remaining_hours,
         ti.project_id,
         ${pCode ? `p.${pCode} AS project_code,` : `NULL AS project_code,`}
         p.${pName} AS project_name
@@ -113,24 +128,15 @@ export async function GET(req: Request, ctx: { params: Promise<{ personId: strin
             ) /
             GREATEST(DATEDIFF(DATE(${endExpr}), DATE(${startExpr})) + 1, 1)
           ) AS planned_hours
-          ,
-          (
-            ${tActual ? `COALESCE(t.${tActual}, 0)` : '0'} *
-            GREATEST(
-              DATEDIFF(
-                LEAST(DATE(${endExpr}), DATE_SUB(DATE(?), INTERVAL 1 DAY)),
-                GREATEST(DATE(${startExpr}), DATE(?))
-              ) + 1,
-              0
-            ) /
-            GREATEST(DATEDIFF(DATE(${endExpr}), DATE(${startExpr})) + 1, 1)
-          ) AS used_hours
         FROM ${T} t
         WHERE t.${tAssignee} = ?
           ${tStatus ? `AND (t.${tStatus} IS NULL OR t.${tStatus} NOT IN ('Finished','Discarded','Cancel'))` : ''}
           AND DATE(${startExpr}) < DATE(?)
           AND DATE(${endExpr}) >= DATE(?)
       ) ti
+      LEFT JOIN (
+        ${usedSql}
+      ) us ON us.task_id = ti.task_id AND us.person_id = ?
       LEFT JOIN ${P} p ON p.${pId} = ti.project_id
       ORDER BY ti.received_at DESC, ti.task_id DESC
     `;
@@ -143,10 +149,11 @@ export async function GET(req: Request, ctx: { params: Promise<{ personId: strin
     // last: personId for join
     // placeholders:
     // 1-2: planned overlap calc
-    // 3-4: actual overlap calc
-    // 5: personId
-    // 6-7: overlap WHERE
-    const args: any[] = [month.end, month.start, month.end, month.start, personId, month.end, month.start];
+    // 3: personId
+    // 4-5: overlap WHERE
+    // 6-7: used hours month filter
+    // 8: personId for join
+    const args: any[] = [month.end, month.start, personId, month.end, month.start, month.start, month.end, personId];
 
     const tasks = await prisma.$queryRawUnsafe<any[]>(sql, ...args);
 

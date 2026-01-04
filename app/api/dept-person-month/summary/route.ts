@@ -78,8 +78,20 @@ export async function GET(req: Request) {
 
     const plannedExpr = tPlanned ? `COALESCE(t.${tPlanned}, 0)` : '0';
 
-    // Note: for dept/month dashboard, "已執行" should match ECP task list "實際時數"
-    // (task-level actual hours), not time report details; otherwise it often shows 0.
+    // 「已執行」：依工時日誌明細（該月）統計，避免拿任務累積實際時數造成跨月虛報
+    if (!(TH && trTimeReportId && thId && thWorkDate)) {
+      return Response.json({ error: 'timeReport/timeDetail mapping missing (need timeReportId + workDate)' }, { status: 500 });
+    }
+    const usedSql = `
+      SELECT
+        tr.${trTaskId} AS task_id,
+        tr.${trUserId} AS person_id,
+        COALESCE(SUM(tr.${trHours}), 0) AS used_hours
+      FROM ${TR} tr
+      LEFT JOIN ${TH} th ON th.${thId} = tr.${trTimeReportId}
+      WHERE th.${thWorkDate} >= ? AND th.${thWorkDate} < ?
+      GROUP BY tr.${trTaskId}, tr.${trUserId}
+    `;
 
     // Month allocation rule:
     // - task belongs to month if [start,end] overlaps [month.start, month.end)
@@ -95,8 +107,8 @@ export async function GET(req: Request) {
         ${uDeptId ? `,u.${uDeptId} AS department_id` : `,NULL AS department_id`},
         COUNT(ti.task_id) AS task_count,
         COALESCE(SUM(COALESCE(ti.planned_hours, 0)), 0) AS received_total_hours,
-        COALESCE(SUM(COALESCE(ti.actual_hours, 0)), 0) AS used_hours,
-        COALESCE(SUM(COALESCE(ti.planned_hours, 0)), 0) - COALESCE(SUM(COALESCE(ti.actual_hours, 0)), 0) AS remaining_hours
+        COALESCE(SUM(COALESCE(us.used_hours, 0)), 0) AS used_hours,
+        COALESCE(SUM(COALESCE(ti.planned_hours, 0)), 0) - COALESCE(SUM(COALESCE(us.used_hours, 0)), 0) AS remaining_hours
       FROM ${U} u
       LEFT JOIN (
         SELECT
@@ -113,32 +125,23 @@ export async function GET(req: Request) {
             ) /
             GREATEST(DATEDIFF(DATE(${endExpr}), DATE(${startExpr})) + 1, 1)
           ) AS planned_hours
-          ,
-          (
-            ${tActual ? `COALESCE(t.${tActual}, 0)` : '0'} *
-            GREATEST(
-              DATEDIFF(
-                LEAST(DATE(${endExpr}), DATE_SUB(DATE(?), INTERVAL 1 DAY)),
-                GREATEST(DATE(${startExpr}), DATE(?))
-              ) + 1,
-              0
-            ) /
-            GREATEST(DATEDIFF(DATE(${endExpr}), DATE(${startExpr})) + 1, 1)
-          ) AS actual_hours
         FROM ${T} t
         WHERE t.${tAssignee} IS NOT NULL AND t.${tAssignee} <> ''
           ${tStatus ? `AND (t.${tStatus} IS NULL OR t.${tStatus} NOT IN ('Finished','Discarded','Cancel'))` : ''}
           AND DATE(${startExpr}) < DATE(?)
           AND DATE(${endExpr}) >= DATE(?)
       ) ti ON ti.person_id = u.${uId}
+      LEFT JOIN (
+        ${usedSql}
+      ) us ON us.task_id = ti.task_id AND us.person_id = u.${uId}
       WHERE 1=1
     `;
 
     // placeholders order:
     // 1-2: planned overlap calc
-    // 3-4: actual overlap calc
-    // 5-6: overlap WHERE
-    const args: Array<string> = [month.end, month.start, month.end, month.start, month.end, month.start];
+    // 3-4: overlap WHERE
+    // 5-6: used hours month filter
+    const args: Array<string> = [month.end, month.start, month.end, month.start, month.start, month.end];
     // exclude system/service users + disabled/deleted users
     sql += ` AND u.${uName} NOT LIKE ? AND u.${uName} NOT LIKE ?`;
     args.push('%MidECP-User%', '%service_user%');
@@ -211,8 +214,8 @@ export async function GET(req: Request) {
       planned_hours_column: { table: m.tables.task, column: plannedHoursCol },
       planned_start_column: { table: m.tables.task, column: plannedStartCol },
       planned_end_column: { table: m.tables.task, column: plannedEndCol },
-      actual_hours_column: { table: m.tables.task, column: m.task.actualHours || null },
-      allocation: { method: 'overlap_days / total_days', unit: 'calendar_days', note: '接收總時數=該月均攤後預估' },
+      executed_hours_source: { table: m.tables.time, column: m.time.hours, month_filter: { table: m.tables.timeReport || null, column: m.timeReport?.workDate || null } },
+      allocation: { method: 'overlap_days / total_days', unit: 'calendar_days', note: '接收總時數=該月任務預估(均攤)' },
       filters: { departmentId: departmentId || null, personId: personId || null },
       people
     });
