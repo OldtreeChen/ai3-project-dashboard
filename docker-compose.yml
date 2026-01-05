@@ -1,0 +1,19 @@
+services:
+  hours-dashboard:
+    build: .
+    container_name: hours-dashboard
+    ports:
+      - "5179:5179"
+    environment:
+      - NODE_ENV=production
+      - PORT=5179
+      # IMPORTANT: set DATABASE_URL via .env (recommended) or directly here
+      - DATABASE_URL=${DATABASE_URL}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:5179/api/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+

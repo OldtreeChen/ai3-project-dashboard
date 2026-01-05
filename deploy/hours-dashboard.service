@@ -1,0 +1,28 @@
+[Unit]
+Description=hours-dashboard (Next.js)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/hours-dashboard
+
+# 建議用非 root 帳號執行，並把 /opt/hours-dashboard 權限給該帳號
+User=hours
+Group=hours
+
+Environment=NODE_ENV=production
+Environment=PORT=5179
+EnvironmentFile=/etc/hours-dashboard.env
+
+ExecStart=/usr/bin/npm run start
+Restart=always
+RestartSec=3
+
+# basic hardening
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
+
+
