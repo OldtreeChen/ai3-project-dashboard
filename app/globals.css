@@ -604,6 +604,17 @@ body{
 .att-table thead .att-table__sticky-name{
   z-index: 4;
 }
+.att-table__sticky-checkin{
+  position: sticky;
+  left: 120px;
+  z-index: 3;
+  background: rgba(11,18,32,0.95);
+  backdrop-filter: blur(6px);
+  min-width: 60px;
+}
+.att-table thead .att-table__sticky-checkin{
+  z-index: 4;
+}
 .att-table__sticky-days{
   position: sticky;
   left: 120px;
