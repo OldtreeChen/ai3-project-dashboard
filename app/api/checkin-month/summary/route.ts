@@ -37,19 +37,13 @@ function getWorkdays(yyyy: number, mm: number): string[] {
 function fmtDate(v: any): string | null {
   if (!v) return null;
   if (v instanceof Date) {
-    const y = v.getFullYear();
-    const m = String(v.getMonth() + 1).padStart(2, '0');
-    const d = String(v.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
+    return `${v.getFullYear()}-${String(v.getMonth() + 1).padStart(2, '0')}-${String(v.getDate()).padStart(2, '0')}`;
   }
   const s = String(v);
   if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
   const parsed = new Date(s);
   if (!isNaN(parsed.getTime())) {
-    const y = parsed.getFullYear();
-    const m = String(parsed.getMonth() + 1).padStart(2, '0');
-    const d = String(parsed.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
+    return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, '0')}-${String(parsed.getDate()).padStart(2, '0')}`;
   }
   return null;
 }
@@ -57,12 +51,9 @@ function fmtDate(v: any): string | null {
 function fmtTime(v: any): string | null {
   if (!v) return null;
   if (v instanceof Date) {
-    const h = String(v.getHours()).padStart(2, '0');
-    const m = String(v.getMinutes()).padStart(2, '0');
-    return `${h}:${m}`;
+    return `${String(v.getHours()).padStart(2, '0')}:${String(v.getMinutes()).padStart(2, '0')}`;
   }
   const s = String(v);
-  // "HH:MM:SS" or "HH:MM"
   const tm = s.match(/(\d{2}:\d{2})/);
   return tm ? tm[1] : null;
 }
@@ -130,43 +121,50 @@ export async function GET(req: Request) {
       dept2Id
     });
 
-    // Query: get all whitelisted users
-    let userSql = `
-      SELECT u.${uId} AS person_id, u.${uName} AS display_name,
-        ${uDeptId ? `u.${uDeptId} AS department_id` : 'NULL AS department_id'}
+    // Single JOIN query: users LEFT JOIN checkin
+    // Clock-in: FCheckinType='1' (normal) OR (FCheckinType IN ('5','6') AND FExType='1')
+    // Clock-out: FCheckinType='2' (normal) OR (FCheckinType IN ('5','6') AND FExType='2')
+    // Use FPreOrReCheckInDate as the actual punch time (more accurate than FRegTime for type 2)
+    let sql = `
+      SELECT
+        u.${uId} AS person_id,
+        u.${uName} AS display_name,
+        ${uDeptId ? `u.${uDeptId} AS department_id,` : 'NULL AS department_id,'}
+        DATE(ci.\`FPreOrReCheckInDate\`) AS checkin_date,
+        MIN(CASE
+          WHEN ci.\`FCheckinType\` = '1'
+            OR (ci.\`FCheckinType\` IN ('5','6') AND ci.\`FExType\` = '1')
+          THEN TIME(ci.\`FPreOrReCheckInDate\`)
+        END) AS clock_in,
+        MAX(CASE
+          WHEN ci.\`FCheckinType\` = '2'
+            OR (ci.\`FCheckinType\` IN ('5','6') AND ci.\`FExType\` = '2')
+          THEN TIME(ci.\`FPreOrReCheckInDate\`)
+        END) AS clock_out,
+        MAX(CASE WHEN ci.\`FCheckinType\` = '1' THEN ci.\`FLateMinutes\` END) AS late_minutes,
+        MAX(CASE WHEN ci.\`FCheckinType\` = '2' THEN ci.\`FLeaveEarlyMinutes\` END) AS leave_early_minutes,
+        COUNT(ci.\`FId\`) AS punch_count
       FROM ${U} u
+      LEFT JOIN ${CI} ci
+        ON ci.\`FUserId\` = u.${uId}
+        AND ci.\`FPreOrReCheckInDate\` >= ? AND ci.\`FPreOrReCheckInDate\` < ?
       WHERE 1=1
         AND u.${uName} NOT LIKE ? AND u.${uName} NOT LIKE ?
     `;
-    const userArgs: any[] = ['%MidECP-User%', '%service_user%'];
-    userSql += active.where;
-    userSql += wl.where;
-    userArgs.push(...wl.args);
-    userSql += ` ORDER BY u.${uName} ASC`;
 
-    const users = await prisma.$queryRawUnsafe<any[]>(userSql, ...userArgs);
+    const args: any[] = [month.start, month.end, '%MidECP-User%', '%service_user%'];
 
-    // Query: check-in records for the month
-    // Use range query on FRegTime for better performance (indexed), then also check FPreOrReCheckInDate
-    const ciSql = `
-      SELECT
-        ci.\`FUserId\` AS user_id,
-        DATE(COALESCE(ci.\`FPreOrReCheckInDate\`, ci.\`FRegTime\`)) AS checkin_date,
-        MIN(CASE WHEN ci.\`FExType\` = '1' OR (ci.\`FExType\` IS NULL AND ci.\`FCheckinType\` IN ('1','3'))
-            THEN COALESCE(ci.\`FPreOrReCheckInDate\`, ci.\`FRegTime\`) END) AS first_clock_in,
-        MAX(CASE WHEN ci.\`FExType\` = '2' OR (ci.\`FExType\` IS NULL AND ci.\`FCheckinType\` IN ('2','4'))
-            THEN COALESCE(ci.\`FPreOrReCheckInDate\`, ci.\`FRegTime\`) END) AS last_clock_out,
-        MAX(ci.\`FLateMinutes\`) AS late_minutes,
-        MAX(ci.\`FLeaveEarlyMinutes\`) AS leave_early_minutes,
-        COUNT(*) AS punch_count
-      FROM ${CI} ci
-      WHERE (ci.\`FRegTime\` >= ? AND ci.\`FRegTime\` < ?)
-         OR (ci.\`FPreOrReCheckInDate\` >= ? AND ci.\`FPreOrReCheckInDate\` < ?)
-      GROUP BY ci.\`FUserId\`, DATE(COALESCE(ci.\`FPreOrReCheckInDate\`, ci.\`FRegTime\`))
-    `;
-    const ciRows = await prisma.$queryRawUnsafe<any[]>(ciSql, month.start, month.end, month.start, month.end);
+    sql += active.where;
+    sql += wl.where;
+    args.push(...wl.args);
 
-    // Build lookup: userId|date -> day info
+    sql += ` GROUP BY u.${uId}, DATE(ci.\`FPreOrReCheckInDate\`)`;
+    sql += ` ORDER BY u.${uName} ASC, checkin_date ASC`;
+
+    const rows = await prisma.$queryRawUnsafe<any[]>(sql, ...args);
+
+    const workdays = getWorkdays(month.yyyy, month.mm);
+
     type CiDay = {
       clock_in: string | null;
       clock_out: string | null;
@@ -174,22 +172,6 @@ export async function GET(req: Request) {
       leave_early_minutes: number | null;
       punch_count: number;
     };
-    const ciMap = new Map<string, CiDay>();
-    for (const row of ciRows) {
-      const dateStr = fmtDate(row.checkin_date);
-      if (!dateStr) continue;
-      const key = `${row.user_id}|${dateStr}`;
-      ciMap.set(key, {
-        clock_in: fmtTime(row.first_clock_in),
-        clock_out: fmtTime(row.last_clock_out),
-        late_minutes: row.late_minutes != null ? Number(row.late_minutes) : null,
-        leave_early_minutes: row.leave_early_minutes != null ? Number(row.leave_early_minutes) : null,
-        punch_count: Number(row.punch_count || 0)
-      });
-    }
-
-    const workdays = getWorkdays(month.yyyy, month.mm);
-
     type PersonRecord = {
       person_id: string;
       display_name: string;
@@ -199,40 +181,70 @@ export async function GET(req: Request) {
       total_late_count: number;
     };
 
-    // Build per-person structure from users + checkin data
-    const seen = new Set<string>();
-    const people: PersonRecord[] = [];
+    const personMap = new Map<string, PersonRecord>();
 
-    for (const u of users) {
-      const pid = String(u.person_id || '');
-      const name = String(u.display_name ?? '').trim();
+    for (const row of rows) {
+      const pid = String(row.person_id || '');
+      const name = String(row.display_name ?? '').trim();
       if (!pid || !name) continue;
 
-      const nameKey = name.replace(/\s*\([^)]*\)\s*$/, '').trim().toLowerCase();
-      if (seen.has(nameKey)) continue;
-      seen.add(nameKey);
-
-      const days: Record<string, CiDay> = {};
-      let checkinDays = 0;
-      let lateCount = 0;
-
-      for (const date of workdays) {
-        const ci = ciMap.get(`${pid}|${date}`);
-        if (ci) {
-          days[date] = ci;
-          checkinDays++;
-          if (ci.late_minutes && ci.late_minutes > 0) lateCount++;
-        }
+      if (!personMap.has(pid)) {
+        personMap.set(pid, {
+          person_id: pid,
+          display_name: name,
+          department_id: row.department_id ? String(row.department_id) : null,
+          days: {},
+          total_checkin_days: 0,
+          total_late_count: 0
+        });
       }
 
-      people.push({
-        person_id: pid,
-        display_name: name,
-        department_id: u.department_id ? String(u.department_id) : null,
-        days,
-        total_checkin_days: checkinDays,
-        total_late_count: lateCount
-      });
+      const dateStr = fmtDate(row.checkin_date);
+      if (!dateStr) continue;
+      const punchCount = Number(row.punch_count || 0);
+      if (punchCount === 0) continue; // LEFT JOIN null row
+
+      const p = personMap.get(pid)!;
+      p.days[dateStr] = {
+        clock_in: fmtTime(row.clock_in),
+        clock_out: fmtTime(row.clock_out),
+        late_minutes: row.late_minutes != null ? Number(row.late_minutes) : null,
+        leave_early_minutes: row.leave_early_minutes != null ? Number(row.leave_early_minutes) : null,
+        punch_count: punchCount
+      };
+    }
+
+    // De-dupe by normalized display name (keep the one with more data)
+    const seen = new Set<string>();
+    const people: PersonRecord[] = [];
+    for (const p of personMap.values()) {
+      const nameKey = p.display_name.replace(/\s*\([^)]*\)\s*$/, '').trim().toLowerCase();
+      if (seen.has(nameKey)) {
+        const idx = people.findIndex(
+          (x) => x.display_name.replace(/\s*\([^)]*\)\s*$/, '').trim().toLowerCase() === nameKey
+        );
+        if (idx >= 0 && Object.keys(p.days).length > Object.keys(people[idx].days).length) {
+          people[idx] = p;
+        }
+        continue;
+      }
+      seen.add(nameKey);
+      people.push(p);
+    }
+
+    // Compute totals
+    for (const p of people) {
+      let checkinDays = 0;
+      let lateCount = 0;
+      for (const date of workdays) {
+        const ci = p.days[date];
+        if (ci) {
+          checkinDays++;
+          if (ci.late_minutes != null && ci.late_minutes > 0) lateCount++;
+        }
+      }
+      p.total_checkin_days = checkinDays;
+      p.total_late_count = lateCount;
     }
 
     // Sort: least checkin days first
