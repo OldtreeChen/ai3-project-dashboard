@@ -155,9 +155,10 @@ export async function GET(req: Request) {
         AND ci.\`FPreOrReCheckInDate\` >= ? AND ci.\`FPreOrReCheckInDate\` < ?
       WHERE 1=1
         AND u.${uName} NOT LIKE ? AND u.${uName} NOT LIKE ?
+        AND u.${uName} != ? AND u.${uName} != ?
     `;
 
-    const args: any[] = [month.start, month.end, '%MidECP-User%', '%service_user%'];
+    const args: any[] = [month.start, month.end, '%MidECP-User%', '%service_user%', '陳慕霖', '陳治瑋'];
 
     sql += active.where;
     sql += wl.where;

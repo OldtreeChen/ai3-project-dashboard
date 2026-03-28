@@ -110,6 +110,8 @@ export async function GET(req: Request) {
 
     sql += ` AND u.${uName} NOT LIKE ? AND u.${uName} NOT LIKE ?`;
     args.push('%MidECP-User%', '%service_user%');
+    sql += ` AND u.${uName} != ? AND u.${uName} != ?`;
+    args.push('陳慕霖', '陳治瑋');
 
     const active = await getUserActiveFilter(m.tables.user, 'u');
     sql += active.where;
