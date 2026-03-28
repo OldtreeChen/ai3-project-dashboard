@@ -9,6 +9,7 @@ const LINKS: LinkItem[] = [
   { href: '/pm-dashboard', label: 'PM 負載彙總表' },
   { href: '/dept-person-month-dashboard', label: '部門/人員任務（月）' },
   { href: '/attendance-month-dashboard', label: '月度工時填報追蹤' },
+  { href: '/checkin-month-dashboard', label: '月度出勤打卡追蹤' },
 ];
 
 export default function TopMenu() {
