@@ -35,6 +35,27 @@ function getWorkdays(yyyy: number, mm: number): string[] {
   return result;
 }
 
+/** Safely format a DATE value from Prisma (may be Date object or string) to YYYY-MM-DD */
+function fmtDate(v: any): string | null {
+  if (!v) return null;
+  if (v instanceof Date) {
+    const y = v.getFullYear();
+    const m = String(v.getMonth() + 1).padStart(2, '0');
+    const d = String(v.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+  const s = String(v);
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  const parsed = new Date(s);
+  if (!isNaN(parsed.getTime())) {
+    const y = parsed.getFullYear();
+    const m = String(parsed.getMonth() + 1).padStart(2, '0');
+    const d = String(parsed.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+  return null;
+}
+
 function tryLoadConfig(): any {
   try {
     const cfgPath = path.resolve(process.cwd(), 'config.json');
@@ -175,7 +196,7 @@ export async function GET(req: Request) {
     // Build checkIn lookup: userId+date -> { clock_in, clock_out, late_minutes }
     const checkInMap = new Map<string, { clock_in: string | null; clock_out: string | null; late_minutes: number | null }>();
     for (const row of checkInRows) {
-      const key = `${row.user_id}|${String(row.checkin_date).slice(0, 10)}`;
+      const key = `${row.user_id}|${fmtDate(row.checkin_date)}`;
       checkInMap.set(key, {
         clock_in: row.clock_in ? String(row.clock_in) : null,
         clock_out: row.clock_out ? String(row.clock_out) : null,
@@ -224,7 +245,7 @@ export async function GET(req: Request) {
       }
       const p = personMap.get(pid)!;
 
-      const dateStr = row.work_date ? String(row.work_date).slice(0, 10) : null;
+      const dateStr = fmtDate(row.work_date);
       const hours = Number(row.hours || 0);
       if (dateStr) {
         if (!p.days[dateStr]) {
