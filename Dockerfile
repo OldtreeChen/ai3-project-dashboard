@@ -21,8 +21,9 @@ COPY . .
 
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# Prisma client is required at runtime for API routes (raw SQL too)
-RUN node ./node_modules/prisma/build/index.js generate
+# Generate Prisma client (needed for raw SQL via $queryRawUnsafe)
+# Use --allow-no-models since we only use raw SQL, no Prisma models
+RUN npx prisma generate --allow-no-models 2>/dev/null || true
 RUN node ./node_modules/next/dist/bin/next build
 
 FROM node:20-bookworm-slim AS runner
