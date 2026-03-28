@@ -2,8 +2,7 @@ services:
   hours-dashboard:
     build: .
     container_name: hours-dashboard
-    ports:
-      - "5179:5179"
+    network_mode: host
     environment:
       - NODE_ENV=production
       - PORT=5179
