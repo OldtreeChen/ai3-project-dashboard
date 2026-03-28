@@ -21,16 +21,13 @@ export const AI_DEPT_WHITELISTS: Record<'dept1' | 'dept2', DeptWhitelist> = {
       'ned.shiu@ai3.cloud',
       'zhi-yan.wu@ai3.cloud',
       'alice.wu@ai3.cloud',
-      'sam.shen@ai3.cloud',
       'xavier.chen@ai3.cloud',
       'alan.chang2@ai3.cloud',
       'marcus.huang@ai3.cloud',
       'ken.lee@ai3.cloud',
       'jenny.feng@ai3.cloud',
-      'ronica.lee@ai3.cloud',
       'eugene.yeh@ai3.cloud',
       'allie.wu@ai3.cloud',
-      'lance.wu@ai3.cloud',
       'win.wu@chainsea.com.tw',
       'roy.cheng@ai3.cloud'
     ],
@@ -48,16 +45,13 @@ export const AI_DEPT_WHITELISTS: Record<'dept1' | 'dept2', DeptWhitelist> = {
       '許鈞喨',
       '吳芷妍',
       '吳家齊',
-      '沈子欽',
       '陳治瑋',
       '張世暉',
       '黃宇晨',
       '李冠熹',
       '馮雅',
-      '李若菲',
       '葉修文',
       '吳宛穎',
-      '吳宗憲',
       '吳印',
       '鄭翔之'
     ]
@@ -81,6 +75,7 @@ export const AI_DEPT_WHITELISTS: Record<'dept1' | 'dept2', DeptWhitelist> = {
       'mark.liao@ai3.cloud'
     ],
     names: [
+      '吳長鴻',
       '王祉元',
       '吳詩瑀',
       '李吳孟修',
@@ -93,8 +88,13 @@ export const AI_DEPT_WHITELISTS: Record<'dept1' | 'dept2', DeptWhitelist> = {
       '丁歆翰',
       '李偉誠',
       '廖育霆',
+      '王諠傑',
       '李騏亘',
-      '廖明信'
+      '廖明信',
+      '張銘介',
+      '楊文汝',
+      '蔡秋燕',
+      '陳憶婷'
     ]
   }
 };

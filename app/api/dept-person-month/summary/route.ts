@@ -131,7 +131,7 @@ export async function GET(req: Request) {
         FROM ${T} t
         LEFT JOIN ${P} p ON p.${pId} = t.${tProjectId}
         WHERE t.${tAssignee} IS NOT NULL AND t.${tAssignee} <> ''
-          ${tStatus ? `AND (t.${tStatus} IS NULL OR t.${tStatus} NOT IN ('Finished','Discarded','Cancel'))` : ''}
+          ${tStatus ? `AND (t.${tStatus} IS NULL OR t.${tStatus} NOT IN ('Discarded','Cancel'))` : ''}
           AND p.${pName} NOT LIKE ?
           AND DATE(${startExpr}) < DATE(?)
           AND DATE(${endExpr}) >= DATE(?)

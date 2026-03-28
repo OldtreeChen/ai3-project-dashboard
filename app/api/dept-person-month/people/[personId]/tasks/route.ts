@@ -130,7 +130,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ personId: strin
           ) AS planned_hours
         FROM ${T} t
         WHERE t.${tAssignee} = ?
-          ${tStatus ? `AND (t.${tStatus} IS NULL OR t.${tStatus} NOT IN ('Finished','Discarded','Cancel'))` : ''}
+          ${tStatus ? `AND (t.${tStatus} IS NULL OR t.${tStatus} NOT IN ('Discarded','Cancel'))` : ''}
           AND DATE(${startExpr}) < DATE(?)
           AND DATE(${endExpr}) >= DATE(?)
       ) ti

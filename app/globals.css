@@ -552,6 +552,132 @@ body{
   width: 90px; /* 狀態欄更窄 */
 }
 
+/* Attendance month dashboard: wider content area */
+.content--wide{
+  max-width: 1800px;
+  width: min(1800px, calc(100% - (var(--sidebar-w) + 32px) * 2));
+}
+@media (max-width: 1100px){
+  .content--wide{
+    width: 100%;
+    max-width: 100%;
+  }
+}
+
+/* Attendance calendar table */
+.att-scroll{
+  overflow: auto;
+  max-height: calc(100vh - 280px);
+}
+.att-table{
+  font-size: 12px;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+.att-table th,
+.att-table td{
+  padding: 6px 4px;
+  text-align: center;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  white-space: nowrap;
+}
+.att-table thead th{
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: rgba(11,18,32,0.95);
+  backdrop-filter: blur(6px);
+}
+.att-table__sticky-name{
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  background: rgba(11,18,32,0.95);
+  backdrop-filter: blur(6px);
+  text-align: left !important;
+  min-width: 120px;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 650;
+}
+.att-table thead .att-table__sticky-name{
+  z-index: 4;
+}
+.att-table__sticky-days{
+  position: sticky;
+  left: 120px;
+  z-index: 3;
+  background: rgba(11,18,32,0.95);
+  backdrop-filter: blur(6px);
+  min-width: 70px;
+}
+.att-table thead .att-table__sticky-days{
+  z-index: 4;
+}
+.att-table__sticky-hours{
+  position: sticky;
+  left: 190px;
+  z-index: 3;
+  background: rgba(11,18,32,0.95);
+  backdrop-filter: blur(6px);
+  min-width: 60px;
+}
+.att-table thead .att-table__sticky-hours{
+  z-index: 4;
+}
+.att-table__day{
+  min-width: 40px;
+  font-size: 11px;
+}
+.att-table__weekday{
+  font-size: 10px;
+  color: var(--muted);
+  font-weight: 400;
+}
+.att-table__day--today{
+  background: rgba(96,165,250,0.12) !important;
+  border-left: 2px solid rgba(96,165,250,0.55);
+  border-right: 2px solid rgba(96,165,250,0.55);
+}
+
+/* Attendance cells */
+.att-cell{
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  font-weight: 600;
+}
+.att-cell--ok{
+  background: rgba(74,222,128,0.18);
+  color: rgba(74,222,128,0.95);
+}
+.att-cell--partial{
+  background: rgba(251,191,36,0.15);
+  color: rgba(251,191,36,0.95);
+}
+.att-cell--miss{
+  background: rgba(251,113,133,0.15);
+  color: rgba(251,113,133,0.80);
+}
+.att-cell--future{
+  background: rgba(255,255,255,0.02);
+  color: rgba(255,255,255,0.20);
+}
+
+/* Legend dots */
+.att-dot{
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  vertical-align: middle;
+  margin-right: 3px;
+}
+.att-dot--ok{ background: rgba(74,222,128,0.80); }
+.att-dot--zero{ background: rgba(251,191,36,0.80); }
+.att-dot--miss{ background: rgba(251,113,133,0.80); }
+.att-dot--future{ background: rgba(255,255,255,0.15); }
+
 .muted{ color: var(--muted); }
 .footer-note{ margin-top: 14px; }
 
