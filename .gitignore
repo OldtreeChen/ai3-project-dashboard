@@ -5,6 +5,7 @@ node_modules/
 # local secrets
 config.json
 .env
+.env.local
 
 # prisma
 prisma/migrations/

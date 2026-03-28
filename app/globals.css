@@ -709,6 +709,62 @@ body{
 .muted{ color: var(--muted); }
 .footer-note{ margin-top: 14px; }
 
+/* GitLab dashboard */
+.gitlab-table{ width: 100%; }
+.gitlab-table th{ white-space: nowrap; }
+.gitlab-table__sortable{
+  cursor: pointer;
+  user-select: none;
+}
+.gitlab-table__sortable:hover{
+  color: rgba(96,165,250,0.9);
+}
+.gitlab-group{
+  font-size: 11px;
+  color: var(--muted);
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-block;
+}
+.gitlab-project-link{
+  color: rgba(96,165,250,0.9);
+  text-decoration: none;
+  font-weight: 600;
+}
+.gitlab-project-link:hover{
+  text-decoration: underline;
+}
+.gitlab-commit-msg{
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--muted);
+}
+.gitlab-commit-id{
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  color: rgba(96,165,250,0.8);
+  text-decoration: none;
+  background: rgba(96,165,250,0.08);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+.gitlab-commit-id:hover{
+  background: rgba(96,165,250,0.18);
+}
+.badge--ok{
+  background: rgba(96,165,250,0.15);
+  color: rgba(96,165,250,0.90);
+}
+.badge--stale{
+  background: rgba(251,146,60,0.15);
+  color: rgba(251,146,60,0.90);
+}
+
 @media (max-width: 980px){
   .cards{ grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .grid{ grid-template-columns: 1fr; }
