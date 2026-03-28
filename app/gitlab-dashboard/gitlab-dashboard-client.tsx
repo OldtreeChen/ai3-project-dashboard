@@ -26,6 +26,8 @@ type Project = {
 
 type ApiResponse = {
   total: number;
+  totalOnServer: number;
+  limit: number;
   fetched_at: string;
   projects: Project[];
 };
@@ -74,6 +76,8 @@ function fmtDate(dateStr: string | null): string {
 
 type SortKey = 'name' | 'group' | 'last_commit' | 'author' | 'days';
 
+const LIMIT_OPTIONS = [25, 50, 100, 200, 500];
+
 export default function GitlabDashboardClient() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -83,13 +87,18 @@ export default function GitlabDashboardClient() {
   const [freshnessFilter, setFreshnessFilter] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('last_commit');
   const [sortAsc, setSortAsc] = useState(false);
+  const [limit, setLimit] = useState(25);
 
-  const loadData = async () => {
+  const loadData = async (fetchLimit?: number) => {
+    const l = fetchLimit ?? limit;
     setLoading(true);
     setError('');
     try {
-      const res = await fetch('/api/gitlab/projects', { headers: { Accept: 'application/json' } });
-      if (!res.ok) throw new Error(`API ${res.status}`);
+      const res = await fetch(`/api/gitlab/projects?limit=${l}`, { headers: { Accept: 'application/json' } });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || `API ${res.status}`);
+      }
       const json: ApiResponse = await res.json();
       setData(json);
     } catch (e: any) {
@@ -101,7 +110,13 @@ export default function GitlabDashboardClient() {
 
   useEffect(() => {
     void loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const handleLimitChange = (newLimit: number) => {
+    setLimit(newLimit);
+    void loadData(newLimit);
+  };
 
   // Extract unique groups
   const groups = useMemo(() => {
@@ -144,7 +159,6 @@ export default function GitlabDashboardClient() {
       });
     }
 
-    // Sort
     const sorted = [...list].sort((a, b) => {
       let cmp = 0;
       switch (sortKey) {
@@ -181,7 +195,7 @@ export default function GitlabDashboardClient() {
 
   // Stats
   const stats = useMemo(() => {
-    if (!data) return { total: 0, active: 0, week: 0, month: 0, stale: 0, dead: 0 };
+    if (!data) return { total: 0, totalOnServer: 0, active: 0, week: 0, month: 0, stale: 0, dead: 0 };
     const projects = data.projects;
     let active = 0, week = 0, month = 0, stale = 0, dead = 0;
     for (const p of projects) {
@@ -192,7 +206,7 @@ export default function GitlabDashboardClient() {
       else if (days <= 90) stale++;
       else dead++;
     }
-    return { total: projects.length, active, week, month, stale, dead };
+    return { total: projects.length, totalOnServer: data.totalOnServer, active, week, month, stale, dead };
   }, [data]);
 
   const handleSort = (key: SortKey) => {
@@ -253,6 +267,14 @@ export default function GitlabDashboardClient() {
               <option value="dead">超過90天</option>
             </select>
           </label>
+          <label className="field">
+            <span className="field__label">顯示數量</span>
+            <select className="field__control" value={limit} onChange={(e) => handleLimitChange(Number(e.target.value))}>
+              {LIMIT_OPTIONS.map((n) => (
+                <option key={n} value={n}>{n} 個</option>
+              ))}
+            </select>
+          </label>
           <button className="btn btn--primary" onClick={() => void loadData()} disabled={loading}>
             {loading ? '載入中…' : '重新整理'}
           </button>
@@ -263,14 +285,14 @@ export default function GitlabDashboardClient() {
           <div className="panel__header">
             <div className="panel__title">專案活躍度概覽</div>
             <div className="panel__meta">
-              {data ? `共 ${stats.total} 個專案` : ''}
-              {data ? ` · 更新時間 ${fmtDate(data.fetched_at)}` : ''}
+              {data ? `顯示 ${stats.total} / 伺服器共 ${stats.totalOnServer} 個專案` : ''}
+              {data ? ` · ${fmtDate(data.fetched_at)}` : ''}
             </div>
           </div>
           <div className="panel__body">
             <div className="summary-strip">
               <div className="summary-strip__item" style={{ cursor: 'pointer' }} onClick={() => setFreshnessFilter('')}>
-                <div className="summary-strip__label">全部專案</div>
+                <div className="summary-strip__label">已載入</div>
                 <div className="summary-strip__value">{stats.total}</div>
               </div>
               <div className="summary-strip__item" style={{ cursor: 'pointer' }} onClick={() => setFreshnessFilter('active')}>

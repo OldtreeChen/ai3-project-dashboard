@@ -33,25 +33,32 @@ interface GitLabCommit {
   message: string;
 }
 
-async function fetchAllProjects(): Promise<GitLabProject[]> {
+async function fetchProjects(limit: number): Promise<{ projects: GitLabProject[]; totalOnServer: number }> {
+  const perPage = Math.min(limit, 100);
+  const maxPages = Math.ceil(limit / perPage);
   const all: GitLabProject[] = [];
-  let page = 1;
-  const perPage = 100;
-  while (true) {
-    const url = `${GITLAB_URL}/api/v4/projects?per_page=${perPage}&page=${page}&order_by=last_activity_at&sort=desc&simple=true`;
+
+  for (let page = 1; page <= maxPages; page++) {
+    const remaining = limit - all.length;
+    const thisPage = Math.min(remaining, perPage);
+    const url = `${GITLAB_URL}/api/v4/projects?per_page=${thisPage}&page=${page}&order_by=last_activity_at&sort=desc&simple=true&archived=false`;
     const res = await fetch(url, {
       headers: { 'PRIVATE-TOKEN': GITLAB_TOKEN },
       signal: AbortSignal.timeout(15000),
     });
-    if (!res.ok) throw new Error(`GitLab API ${res.status}`);
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      throw new Error(`GitLab API ${res.status}: ${body.slice(0, 200)}`);
+    }
+    const totalOnServer = Number(res.headers.get('X-Total') || '0');
     const data: GitLabProject[] = await res.json();
-    if (data.length === 0) break;
+    if (data.length === 0) return { projects: all, totalOnServer };
     all.push(...data);
+    if (all.length >= limit) return { projects: all.slice(0, limit), totalOnServer };
     const totalPages = Number(res.headers.get('X-Total-Pages') || '1');
-    if (page >= totalPages) break;
-    page++;
+    if (page >= totalPages) return { projects: all, totalOnServer };
   }
-  return all;
+  return { projects: all, totalOnServer: all.length };
 }
 
 async function fetchLastCommit(projectId: number, branch: string | null): Promise<GitLabCommit | null> {
@@ -72,17 +79,22 @@ async function fetchLastCommit(projectId: number, branch: string | null): Promis
 
 export async function GET(req: NextRequest) {
   if (!GITLAB_URL || !GITLAB_TOKEN) {
-    return Response.json({ error: 'GITLAB_URL or GITLAB_TOKEN not configured' }, { status: 500 });
+    return Response.json({
+      error: `GITLAB_URL or GITLAB_TOKEN not configured. GITLAB_URL=${GITLAB_URL ? 'set' : 'empty'}, GITLAB_TOKEN=${GITLAB_TOKEN ? 'set' : 'empty'}`,
+    }, { status: 500 });
   }
 
   try {
-    const projects = await fetchAllProjects();
+    const { searchParams } = new URL(req.url);
+    const limit = Math.min(Number(searchParams.get('limit') || '25'), 500);
 
-    // Filter out archived and empty repos
-    const active = projects.filter((p) => !p.archived && !p.empty_repo);
+    const { projects, totalOnServer } = await fetchProjects(limit);
 
-    // Fetch last commit for each project (in batches of 20 to avoid overwhelming)
-    const batchSize = 20;
+    // Filter empty repos
+    const active = projects.filter((p) => !p.empty_repo);
+
+    // Fetch last commit in batches of 10
+    const batchSize = 10;
     const results: any[] = [];
 
     for (let i = 0; i < active.length; i += batchSize) {
@@ -118,6 +130,8 @@ export async function GET(req: NextRequest) {
 
     return Response.json({
       total: results.length,
+      totalOnServer,
+      limit,
       fetched_at: new Date().toISOString(),
       projects: results,
     });
