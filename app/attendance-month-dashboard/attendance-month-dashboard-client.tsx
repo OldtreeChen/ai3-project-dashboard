@@ -17,6 +17,7 @@ type PersonRow = {
 
 type SummaryResponse = {
   month: string;
+  allDays: string[];
   workdays: string[];
   people: PersonRow[];
 };
@@ -59,6 +60,11 @@ function weekdayLabel(dateStr: string) {
   return map[d.getDay()] || '';
 }
 
+function isWeekend(dateStr: string) {
+  const d = new Date(dateStr + 'T00:00:00').getDay();
+  return d === 0 || d === 6;
+}
+
 function isToday(dateStr: string) {
   const now = new Date();
   const y = now.getFullYear();
@@ -81,11 +87,15 @@ export default function AttendanceMonthDashboardClient() {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [workdays, setWorkdays] = useState<string[]>([]);
+  const [allDays, setAllDays] = useState<string[]>([]);
+  const [workdaySet, setWorkdaySet] = useState<Set<string>>(new Set());
   const [people, setPeople] = useState<PersonRow[]>([]);
 
-  const workdayCount = workdays.length;
-  const pastWorkdays = useMemo(() => workdays.filter((d) => isPast(d) || isToday(d)), [workdays]);
+  const workdayCount = useMemo(() => workdaySet.size, [workdaySet]);
+  const pastWorkdays = useMemo(
+    () => [...workdaySet].filter((d) => isPast(d) || isToday(d)),
+    [workdaySet]
+  );
 
   const totals = useMemo(() => {
     const count = people.length;
@@ -114,7 +124,8 @@ export default function AttendanceMonthDashboardClient() {
     try {
       const q = buildQuery({ month, departmentId });
       const data = await apiGet<SummaryResponse>(`/api/attendance-month/summary${q}`);
-      setWorkdays(data.workdays || []);
+      setAllDays(data.allDays || data.workdays || []);
+      setWorkdaySet(new Set(data.workdays || []));
       setPeople(data.people || []);
     } catch (e: any) {
       setError(e?.message || '查詢失敗');
@@ -230,6 +241,7 @@ export default function AttendanceMonthDashboardClient() {
                 <span className="att-dot att-dot--partial" style={{ marginLeft: 8 }} /> &lt;8h
                 <span className="att-dot att-dot--miss" style={{ marginLeft: 8 }} /> 未填
                 <span className="att-dot att-dot--future" style={{ marginLeft: 8 }} /> 未到
+                <span className="att-dot att-dot--weekend" style={{ marginLeft: 8 }} /> 假日
               </span>
             </div>
           </div>
@@ -241,12 +253,18 @@ export default function AttendanceMonthDashboardClient() {
                     <th className="att-table__sticky-name">人員</th>
                     <th className="att-table__sticky-days num">已填天數</th>
                     <th className="att-table__sticky-hours num">總時數</th>
-                    {workdays.map((d) => (
-                      <th key={d} className={`att-table__day num${isToday(d) ? ' att-table__day--today' : ''}`}>
-                        <div>{dayLabel(d)}</div>
-                        <div className="att-table__weekday">{weekdayLabel(d)}</div>
-                      </th>
-                    ))}
+                    {allDays.map((d) => {
+                      const we = isWeekend(d);
+                      return (
+                        <th
+                          key={d}
+                          className={`att-table__day num${isToday(d) ? ' att-table__day--today' : ''}${we ? ' att-table__day--weekend' : ''}`}
+                        >
+                          <div>{dayLabel(d)}</div>
+                          <div className="att-table__weekday">{weekdayLabel(d)}</div>
+                        </th>
+                      );
+                    })}
                   </tr>
                 </thead>
                 <tbody>
@@ -267,24 +285,29 @@ export default function AttendanceMonthDashboardClient() {
                             {p.total_reported_days}/{pastWorkdays.length}
                           </td>
                           <td className="att-table__sticky-hours num">{fmtHours(p.total_hours)}</td>
-                          {workdays.map((d) => {
+                          {allDays.map((d) => {
                             const hours = p.days[d] || 0;
                             const past = isPast(d) || isToday(d);
+                            const we = isWeekend(d);
+                            const isWork = workdaySet.has(d);
                             let cls = 'att-cell';
-                            if (!past) {
+                            if (we) {
+                              cls += hours > 0 ? ' att-cell--weekend-has' : ' att-cell--weekend';
+                            } else if (!past) {
                               cls += ' att-cell--future';
                             } else if (hours > 0) {
                               cls += hours >= 8 ? ' att-cell--ok' : ' att-cell--partial';
                             } else {
                               cls += ' att-cell--miss';
                             }
+                            const tipLabel = we ? '假日' : hours > 0 ? `${fmtHours(hours)}h` : past ? '未填' : '未到';
                             return (
                               <td
                                 key={d}
                                 className={`${cls}${isToday(d) ? ' att-table__day--today' : ''}`}
-                                title={`${p.display_name}｜${d}｜${hours > 0 ? `${fmtHours(hours)}h` : past ? '未填' : '未到'}`}
+                                title={`${p.display_name}｜${d} (${weekdayLabel(d)})｜${tipLabel}`}
                               >
-                                {hours > 0 ? fmtHours(hours) : past ? '--' : ''}
+                                {hours > 0 ? fmtHours(hours) : (isWork && past) ? '--' : ''}
                               </td>
                             );
                           })}
@@ -293,7 +316,7 @@ export default function AttendanceMonthDashboardClient() {
                     })
                   ) : (
                     <tr>
-                      <td colSpan={3 + workdays.length} className="muted" style={{ textAlign: 'center' }}>
+                      <td colSpan={3 + allDays.length} className="muted" style={{ textAlign: 'center' }}>
                         尚無資料
                       </td>
                     </tr>

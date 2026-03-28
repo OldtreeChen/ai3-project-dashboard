@@ -21,17 +21,22 @@ function parseMonthParam(v: string | null) {
   return { yyyy, mm, start, end };
 }
 
-function getWorkdays(yyyy: number, mm: number): string[] {
+function getAllDays(yyyy: number, mm: number): string[] {
   const daysInMonth = new Date(yyyy, mm, 0).getDate();
   const result: string[] = [];
   for (let d = 1; d <= daysInMonth; d++) {
-    const day = new Date(yyyy, mm - 1, d).getDay();
-    if (day === 0 || day === 6) continue;
     const dd = String(d).padStart(2, '0');
     const mmStr = String(mm).padStart(2, '0');
     result.push(`${yyyy}-${mmStr}-${dd}`);
   }
   return result;
+}
+
+function getWorkdays(yyyy: number, mm: number): string[] {
+  return getAllDays(yyyy, mm).filter((ds) => {
+    const dow = new Date(ds + 'T00:00:00').getDay();
+    return dow !== 0 && dow !== 6;
+  });
 }
 
 function fmtDate(v: any): string | null {
@@ -163,6 +168,7 @@ export async function GET(req: Request) {
 
     const rows = await prisma.$queryRawUnsafe<any[]>(sql, ...args);
 
+    const allDays = getAllDays(month.yyyy, month.mm);
     const workdays = getWorkdays(month.yyyy, month.mm);
 
     type CiDay = {
@@ -253,6 +259,7 @@ export async function GET(req: Request) {
     return Response.json({
       month: `${String(month.yyyy)}-${String(month.mm).padStart(2, '0')}`,
       date_range: { from: month.start, to_exclusive: month.end },
+      allDays,
       workdays,
       filters: { departmentId: departmentId || null },
       people

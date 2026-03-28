@@ -25,6 +25,7 @@ type PersonRow = {
 
 type SummaryResponse = {
   month: string;
+  allDays: string[];
   workdays: string[];
   people: PersonRow[];
 };
@@ -61,6 +62,11 @@ function weekdayLabel(dateStr: string) {
   return map[d.getDay()] || '';
 }
 
+function isWeekend(dateStr: string) {
+  const d = new Date(dateStr + 'T00:00:00').getDay();
+  return d === 0 || d === 6;
+}
+
 function isToday(dateStr: string) {
   const now = new Date();
   const y = now.getFullYear();
@@ -83,11 +89,15 @@ export default function CheckinMonthDashboardClient() {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [workdays, setWorkdays] = useState<string[]>([]);
+  const [allDays, setAllDays] = useState<string[]>([]);
+  const [workdaySet, setWorkdaySet] = useState<Set<string>>(new Set());
   const [people, setPeople] = useState<PersonRow[]>([]);
 
-  const workdayCount = workdays.length;
-  const pastWorkdays = useMemo(() => workdays.filter((d) => isPast(d) || isToday(d)), [workdays]);
+  const workdayCount = useMemo(() => workdaySet.size, [workdaySet]);
+  const pastWorkdays = useMemo(
+    () => [...workdaySet].filter((d) => isPast(d) || isToday(d)),
+    [workdaySet]
+  );
 
   const totals = useMemo(() => {
     const count = people.length;
@@ -116,7 +126,8 @@ export default function CheckinMonthDashboardClient() {
     try {
       const q = buildQuery({ month, departmentId });
       const data = await apiGet<SummaryResponse>(`/api/checkin-month/summary${q}`);
-      setWorkdays(data.workdays || []);
+      setAllDays(data.allDays || data.workdays || []);
+      setWorkdaySet(new Set(data.workdays || []));
       setPeople(data.people || []);
     } catch (e: any) {
       setError(e?.message || '查詢失敗');
@@ -240,6 +251,7 @@ export default function CheckinMonthDashboardClient() {
                 <span className="att-dot att-dot--partial" style={{ marginLeft: 8 }} /> 遲到
                 <span className="att-dot att-dot--miss" style={{ marginLeft: 8 }} /> 缺卡
                 <span className="att-dot att-dot--future" style={{ marginLeft: 8 }} /> 未到
+                <span className="att-dot att-dot--weekend" style={{ marginLeft: 8 }} /> 假日
               </span>
             </div>
           </div>
@@ -251,12 +263,18 @@ export default function CheckinMonthDashboardClient() {
                     <th className="att-table__sticky-name">人員</th>
                     <th className="att-table__sticky-days num">打卡天</th>
                     <th className="att-table__sticky-hours num">遲到</th>
-                    {workdays.map((d) => (
-                      <th key={d} className={`att-table__day num${isToday(d) ? ' att-table__day--today' : ''}`}>
-                        <div>{dayLabel(d)}</div>
-                        <div className="att-table__weekday">{weekdayLabel(d)}</div>
-                      </th>
-                    ))}
+                    {allDays.map((d) => {
+                      const we = isWeekend(d);
+                      return (
+                        <th
+                          key={d}
+                          className={`att-table__day num${isToday(d) ? ' att-table__day--today' : ''}${we ? ' att-table__day--weekend' : ''}`}
+                        >
+                          <div>{dayLabel(d)}</div>
+                          <div className="att-table__weekday">{weekdayLabel(d)}</div>
+                        </th>
+                      );
+                    })}
                   </tr>
                 </thead>
                 <tbody>
@@ -288,11 +306,15 @@ export default function CheckinMonthDashboardClient() {
                               '0'
                             )}
                           </td>
-                          {workdays.map((d) => {
+                          {allDays.map((d) => {
                             const ci = p.days[d];
                             const past = isPast(d) || isToday(d);
+                            const we = isWeekend(d);
+                            const isWork = workdaySet.has(d);
                             let cls = 'att-cell';
-                            if (!past) {
+                            if (we) {
+                              cls += ci ? ' att-cell--weekend-has' : ' att-cell--weekend';
+                            } else if (!past) {
                               cls += ' att-cell--future';
                             } else if (ci) {
                               const isLate = ci.late_minutes != null && ci.late_minutes > 0;
@@ -302,7 +324,7 @@ export default function CheckinMonthDashboardClient() {
                             }
 
                             // Tooltip
-                            const tipParts = [p.display_name, d];
+                            const tipParts = [p.display_name, `${d} (${weekdayLabel(d)})`];
                             if (ci) {
                               if (ci.clock_in) tipParts.push(`上班: ${ci.clock_in}`);
                               if (ci.clock_out) tipParts.push(`下班: ${ci.clock_out}`);
@@ -310,14 +332,12 @@ export default function CheckinMonthDashboardClient() {
                               if (ci.leave_early_minutes && ci.leave_early_minutes > 0) tipParts.push(`早退 ${ci.leave_early_minutes} 分鐘`);
                               tipParts.push(`打卡 ${ci.punch_count} 次`);
                             } else {
-                              tipParts.push(past ? '未打卡' : '未到');
+                              tipParts.push(we ? '假日' : past ? '未打卡' : '未到');
                             }
 
                             // Cell content
                             let content = '';
-                            if (!past) {
-                              content = '';
-                            } else if (ci) {
+                            if (ci) {
                               if (ci.late_minutes && ci.late_minutes > 0) {
                                 content = `遲${ci.late_minutes}`;
                               } else if (ci.clock_in) {
@@ -325,7 +345,7 @@ export default function CheckinMonthDashboardClient() {
                               } else {
                                 content = 'V';
                               }
-                            } else {
+                            } else if (isWork && past) {
                               content = '--';
                             }
 
@@ -351,7 +371,7 @@ export default function CheckinMonthDashboardClient() {
                     })
                   ) : (
                     <tr>
-                      <td colSpan={3 + workdays.length} className="muted" style={{ textAlign: 'center' }}>
+                      <td colSpan={3 + allDays.length} className="muted" style={{ textAlign: 'center' }}>
                         尚無資料
                       </td>
                     </tr>

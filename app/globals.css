@@ -674,6 +674,22 @@ body{
   background: rgba(255,255,255,0.02);
   color: rgba(255,255,255,0.20);
 }
+.att-cell--weekend{
+  background: rgba(100,116,139,0.08);
+  color: rgba(100,116,139,0.30);
+}
+.att-cell--weekend-has{
+  background: rgba(96,165,250,0.10);
+  color: rgba(96,165,250,0.70);
+  font-weight: 500;
+}
+.att-table__day--weekend{
+  background: rgba(100,116,139,0.10) !important;
+  color: rgba(100,116,139,0.60);
+}
+.att-table__day--weekend .att-table__weekday{
+  color: rgba(251,113,133,0.70);
+}
 
 /* Legend dots */
 .att-dot{
@@ -688,6 +704,7 @@ body{
 .att-dot--zero{ background: rgba(251,191,36,0.80); }
 .att-dot--miss{ background: rgba(251,113,133,0.80); }
 .att-dot--future{ background: rgba(255,255,255,0.15); }
+.att-dot--weekend{ background: rgba(100,116,139,0.40); }
 
 .muted{ color: var(--muted); }
 .footer-note{ margin-top: 14px; }
