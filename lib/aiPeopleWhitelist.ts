@@ -15,7 +15,6 @@ export const AI_DEPT_WHITELISTS: Record<'dept1' | 'dept2', DeptWhitelist> = {
       'howard.chang@ai3.cloud',
       'andy.chen@ai3.cloud',
       'rex.lo@ai3.cloud',
-      'yi.chou@ai3.cloud',
       'jonathan.kao@ai3.cloud',
       'eddie.jiang@ai3.cloud',
       'ned.shiu@ai3.cloud',
@@ -39,7 +38,6 @@ export const AI_DEPT_WHITELISTS: Record<'dept1' | 'dept2', DeptWhitelist> = {
       '張紘齊',
       '陳柏仲',
       '羅弘翔',
-      '周儀',
       '高仲揚',
       '江維鴻',
       '許鈞喨',
@@ -91,7 +89,6 @@ export const AI_DEPT_WHITELISTS: Record<'dept1' | 'dept2', DeptWhitelist> = {
       '王諠傑',
       '李騏亘',
       '廖明信',
-      '張銘介',
       '楊文汝',
       '蔡秋燕',
       '陳憶婷'
