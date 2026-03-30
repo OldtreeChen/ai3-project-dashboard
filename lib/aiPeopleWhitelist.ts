@@ -4,9 +4,40 @@ import { getEcpMapping, sqlId } from '@/lib/ecpSchema';
 export type DeptWhitelist = { deptName: string; emails: string[]; names: string[] };
 
 // Excluded users (not shown in any dashboard)
+// These users have FEnabled=1 in DB but are actually inactive
 export const EXCLUDED_USERS: string[] = [
   '陳慕霖',
   '陳治瑋',
+  '沈子欽',
+  '丁奕荳',
+  '吳宗憲',
+  '吳柚彤',
+  '呂思潁',
+  '周禹丞',
+  '廖偉彤',
+  '周儀',
+  '張銘介',
+  '張達明',
+  '徐珮芳',
+  '李若菲',
+  '游志鴻',
+  '范綱恒',
+  '葉后儀',
+  '蔡佳晏',
+  '許光軒',
+  '許如蕙',
+  '邱欣怡',
+  '何子杰',
+  '吳佳勳',
+  '廖冠富',
+  '江昱儒',
+  '江浩志',
+  '胡妤安',
+  '范光典',
+  '葉德懋',
+  '董妙珍',
+  '鄭淑娟',
+  '陳建翔',
 ];
 
 const globalCache = globalThis as unknown as {
