@@ -110,8 +110,6 @@ export async function GET(req: Request) {
 
     sql += ` AND u.${uName} NOT LIKE ? AND u.${uName} NOT LIKE ?`;
     args.push('%MidECP-User%', '%service_user%');
-    sql += ` AND u.${uName} != ? AND u.${uName} != ?`;
-    args.push('陳慕霖', '陳治瑋');
 
     const active = await getUserActiveFilter(m.tables.user, 'u');
     sql += active.where;
@@ -119,6 +117,7 @@ export async function GET(req: Request) {
     const { dept1Id, dept2Id } = await getAiDeptIds();
     const wl = buildWhitelistWhere({
       uName: String(uName),
+      uDeptId: uDeptId ? String(uDeptId) : null,
       uAccount: uAccount ? String(uAccount) : null,
       departmentId: departmentId || null,
       dept1Id,

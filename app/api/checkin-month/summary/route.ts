@@ -120,6 +120,7 @@ export async function GET(req: Request) {
     const { dept1Id, dept2Id } = await getAiDeptIds();
     const wl = buildWhitelistWhere({
       uName: String(uName),
+      uDeptId: uDeptId ? String(uDeptId) : null,
       uAccount: uAccount ? String(uAccount) : null,
       departmentId: departmentId || null,
       dept1Id,
@@ -127,9 +128,6 @@ export async function GET(req: Request) {
     });
 
     // Single JOIN query: users LEFT JOIN checkin
-    // Clock-in: FCheckinType='1' (normal) OR (FCheckinType IN ('5','6') AND FExType='1')
-    // Clock-out: FCheckinType='2' (normal) OR (FCheckinType IN ('5','6') AND FExType='2')
-    // Use FPreOrReCheckInDate as the actual punch time (more accurate than FRegTime for type 2)
     let sql = `
       SELECT
         u.${uId} AS person_id,
@@ -155,10 +153,9 @@ export async function GET(req: Request) {
         AND ci.\`FPreOrReCheckInDate\` >= ? AND ci.\`FPreOrReCheckInDate\` < ?
       WHERE 1=1
         AND u.${uName} NOT LIKE ? AND u.${uName} NOT LIKE ?
-        AND u.${uName} != ? AND u.${uName} != ?
     `;
 
-    const args: any[] = [month.start, month.end, '%MidECP-User%', '%service_user%', '陳慕霖', '陳治瑋'];
+    const args: any[] = [month.start, month.end, '%MidECP-User%', '%service_user%'];
 
     sql += active.where;
     sql += wl.where;

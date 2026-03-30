@@ -3,98 +3,11 @@ import { getEcpMapping, sqlId } from '@/lib/ecpSchema';
 
 export type DeptWhitelist = { deptName: string; emails: string[]; names: string[] };
 
-// Source: user-provided whitelist screenshots (AI專案一部 / AI專案二部)
-export const AI_DEPT_WHITELISTS: Record<'dept1' | 'dept2', DeptWhitelist> = {
-  dept1: {
-    deptName: 'AI專案一部',
-    emails: [
-      'yuwen.wang@chainsea.com.tw',
-      'kevin.hsu@chainsea.com.tw',
-      'wayne.chu@ai3.cloud',
-      'edwin.zhan@ai3.cloud',
-      'howard.chang@ai3.cloud',
-      'andy.chen@ai3.cloud',
-      'rex.lo@ai3.cloud',
-      'jonathan.kao@ai3.cloud',
-      'eddie.jiang@ai3.cloud',
-      'ned.shiu@ai3.cloud',
-      'zhi-yan.wu@ai3.cloud',
-      'alice.wu@ai3.cloud',
-      'xavier.chen@ai3.cloud',
-      'alan.chang2@ai3.cloud',
-      'marcus.huang@ai3.cloud',
-      'ken.lee@ai3.cloud',
-      'jenny.feng@ai3.cloud',
-      'eugene.yeh@ai3.cloud',
-      'allie.wu@ai3.cloud',
-      'win.wu@chainsea.com.tw',
-      'roy.cheng@ai3.cloud'
-    ],
-    names: [
-      '王育文',
-      '徐文澤',
-      '朱惟宇',
-      '詹鈞翔',
-      '張紘齊',
-      '陳柏仲',
-      '羅弘翔',
-      '高仲揚',
-      '江維鴻',
-      '許鈞喨',
-      '吳芷妍',
-      '吳家齊',
-      '陳治瑋',
-      '張世暉',
-      '黃宇晨',
-      '李冠熹',
-      '馮雅',
-      '葉修文',
-      '吳宛穎',
-      '吳印',
-      '鄭翔之'
-    ]
-  },
-  dept2: {
-    deptName: 'AI專案二部',
-    emails: [
-      'tina.wang@ai3.cloud',
-      'shih-yu.wu@ai3.cloud',
-      'alex.liwu@ai3.cloud',
-      'xander.wang@ai3.cloud',
-      'melody.lee@ai3.cloud',
-      'chloe.wu@ai3.cloud',
-      'oldtree.chen@qbiai.com',
-      'jason.cheng@ai3.cloud',
-      'brian.hsieh@ai3.cloud',
-      'dennis.ting@ai3.cloud',
-      'daniel.lee@ai3.cloud',
-      'anka.liao@ai3.cloud',
-      'leo.lee@ai3.cloud',
-      'mark.liao@ai3.cloud'
-    ],
-    names: [
-      '吳長鴻',
-      '王祉元',
-      '吳詩瑀',
-      '李吳孟修',
-      '王子豪',
-      '李芷瑩',
-      '吳玟萱',
-      '陳慕霖-專案二部',
-      '鄭傑丞',
-      '謝政棋',
-      '丁歆翰',
-      '李偉誠',
-      '廖育霆',
-      '王諠傑',
-      '李騏亘',
-      '廖明信',
-      '楊文汝',
-      '蔡秋燕',
-      '陳憶婷'
-    ]
-  }
-};
+// Excluded users (not shown in any dashboard)
+export const EXCLUDED_USERS: string[] = [
+  '陳慕霖',
+  '陳治瑋',
+];
 
 const globalCache = globalThis as unknown as {
   __aiDeptIds?: { dept1Id: string | null; dept2Id: string | null };
@@ -126,61 +39,50 @@ export async function getAiDeptIds(): Promise<{ dept1Id: string | null; dept2Id:
   return globalCache.__aiDeptIds;
 }
 
+/**
+ * Build WHERE clause to filter users by department (DB-driven).
+ * Uses TsUser.FDepartmentId to match AI專案一部/二部 instead of hardcoded name lists.
+ * Also excludes users in EXCLUDED_USERS.
+ */
 export function buildWhitelistWhere(opts: {
-  uName: string; // sql identifier (may include backticks)
+  uName: string;
+  uDeptId: string | null;
   uAccount: string | null;
   departmentId: string | null;
   dept1Id: string | null;
   dept2Id: string | null;
 }) {
-  const { uName, uAccount, departmentId, dept1Id, dept2Id } = opts;
+  const { uName, uDeptId, departmentId, dept1Id, dept2Id } = opts;
+  const args: any[] = [];
+  let where = '';
 
-  const addClause = (_deptId: string, wl: DeptWhitelist) => {
-    const args: any[] = [];
-    let cond = `(`;
-    const parts: string[] = [];
+  // Department-based filtering using DB column
+  if (uDeptId) {
+    if (departmentId) {
+      // Filter by specific department
+      where += ` AND u.${uDeptId} = ?`;
+      args.push(departmentId);
+    } else if (dept1Id && dept2Id) {
+      // Default: show both AI departments
+      where += ` AND u.${uDeptId} IN (?, ?)`;
+      args.push(dept1Id, dept2Id);
+    } else if (dept1Id) {
+      where += ` AND u.${uDeptId} = ?`;
+      args.push(dept1Id);
+    } else if (dept2Id) {
+      where += ` AND u.${uDeptId} = ?`;
+      args.push(dept2Id);
+    }
+  }
 
-    // Normalize display name: strip anything after "(" or "（"
+  // Exclude specific users
+  if (EXCLUDED_USERS.length > 0) {
     const baseNameExpr = `TRIM(SUBSTRING_INDEX(SUBSTRING_INDEX(u.${uName}, '（', 1), '(', 1))`;
-
-    if (uAccount && wl.emails.length) {
-      const ps = wl.emails.map(() => '?').join(',');
-      parts.push(`LOWER(u.${uAccount}) IN (${ps})`);
-      args.push(...wl.emails.map((e) => e.toLowerCase()));
+    for (const name of EXCLUDED_USERS) {
+      where += ` AND ${baseNameExpr} != ?`;
+      args.push(name);
     }
-    if (wl.names.length) {
-      const ps2 = wl.names.map(() => '?').join(',');
-      parts.push(`${baseNameExpr} IN (${ps2})`);
-      args.push(...wl.names);
-    }
-
-    // If neither is available, make it impossible (avoid leaking users)
-    if (!parts.length) {
-      parts.push('1=0');
-    }
-    cond += parts.join(' OR ') + ')';
-    return { cond, args };
-  };
-
-  // If departmentId is specified and matches one of the AI depts, filter only that dept's whitelist.
-  if (departmentId && dept1Id && departmentId === dept1Id) {
-    const c = addClause(dept1Id, AI_DEPT_WHITELISTS.dept1);
-    return { where: ` AND ${c.cond}`, args: c.args };
-  }
-  if (departmentId && dept2Id && departmentId === dept2Id) {
-    const c = addClause(dept2Id, AI_DEPT_WHITELISTS.dept2);
-    return { where: ` AND ${c.cond}`, args: c.args };
   }
 
-  // Default: show both depts but only whitelisted users.
-  if (dept1Id && dept2Id) {
-    const c1 = addClause(dept1Id, AI_DEPT_WHITELISTS.dept1);
-    const c2 = addClause(dept2Id, AI_DEPT_WHITELISTS.dept2);
-    return { where: ` AND (${c1.cond} OR ${c2.cond})`, args: [...c1.args, ...c2.args] };
-  }
-
-  // If we can't resolve dept ids, don't apply whitelist (avoid empty results).
-  return { where: '', args: [] as any[] };
+  return { where, args };
 }
-
-

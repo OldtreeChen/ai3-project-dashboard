@@ -40,6 +40,7 @@ export async function GET(req: Request) {
   const { dept1Id, dept2Id } = await getAiDeptIds();
   const wl = buildWhitelistWhere({
     uName: String(uName),
+    uDeptId: uDeptId ? String(uDeptId) : null,
     uAccount: uAccount ? String(uAccount) : null,
     departmentId: departmentId || null,
     dept1Id,

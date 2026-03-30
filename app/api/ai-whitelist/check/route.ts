@@ -1,12 +1,11 @@
 import { prisma } from '@/lib/prisma';
 import { getEcpMapping, sqlId } from '@/lib/ecpSchema';
-import { AI_DEPT_WHITELISTS } from '@/lib/aiPeopleWhitelist';
+import { getAiDeptIds, EXCLUDED_USERS } from '@/lib/aiPeopleWhitelist';
 import { getUserActiveFilter } from '@/lib/userActive';
 
 export const dynamic = 'force-dynamic';
 
 function normNameSql(uNameSql: string) {
-  // strip anything after "(" or "（"
   return `TRIM(SUBSTRING_INDEX(SUBSTRING_INDEX(${uNameSql}, '（', 1), '(', 1))`;
 }
 
@@ -18,52 +17,59 @@ export async function GET(req: Request) {
   const U = sqlId(m.tables.user);
   const uId = sqlId(m.user.id);
   const uName = sqlId(m.user.displayName);
+  const uDeptId = m.user.departmentId ? sqlId(m.user.departmentId) : null;
+  const uAccount = m.user.account ? sqlId(m.user.account) : null;
+
+  const D = m.tables.department && m.department ? sqlId(m.tables.department) : null;
+  const dId = m.department ? sqlId(m.department.id) : null;
+  const dName = m.department ? sqlId(m.department.name) : null;
 
   const baseNameExpr = normNameSql(`u.${uName}`);
 
-  const commonArgs: any[] = [];
-  let commonWhere = `WHERE 1=1`;
+  const { dept1Id, dept2Id } = await getAiDeptIds();
 
-  // exclude system/service users
-  commonWhere += ` AND u.${uName} NOT LIKE ? AND u.${uName} NOT LIKE ?`;
-  commonArgs.push('%MidECP-User%', '%service_user%');
+  const loadDept = async (deptId: string | null, deptLabel: string) => {
+    if (!deptId || !uDeptId) return { deptName: deptLabel, members: [], excluded: EXCLUDED_USERS };
 
-  if (!includeDisabled) {
-    const active = await getUserActiveFilter(m.tables.user, 'u');
-    commonWhere += active.where;
-  }
-
-  const checkOne = async (names: string[]) => {
-    if (!names.length) return { found: [] as string[], missing: [] as string[] };
-    const ps = names.map(() => '?').join(',');
-    const sql = `
+    let sql = `
       SELECT DISTINCT
         ${baseNameExpr} AS name,
         u.${uId} AS id
+        ${uAccount ? `, u.${uAccount} AS account` : ''}
+        ${D && dId && dName ? `, d.${dName} AS dept_name` : ''}
       FROM ${U} u
-      ${commonWhere}
-        AND ${baseNameExpr} IN (${ps})
-      ORDER BY name ASC
+      ${D && dId ? `LEFT JOIN ${D} d ON d.${dId} = u.${uDeptId}` : ''}
+      WHERE 1=1
+        AND u.${uDeptId} = ?
+        AND u.${uName} NOT LIKE ? AND u.${uName} NOT LIKE ?
     `;
-    const rows = await prisma.$queryRawUnsafe<any[]>(sql, ...commonArgs, ...names);
-    const found = Array.from(new Set(rows.map((r) => String(r.name ?? '').trim()).filter(Boolean)));
-    const foundSet = new Set(found);
-    const missing = names.filter((n) => !foundSet.has(n));
-    return { found, missing };
+    const args: any[] = [deptId, '%MidECP-User%', '%service_user%'];
+
+    if (!includeDisabled) {
+      const active = await getUserActiveFilter(m.tables.user, 'u');
+      sql += active.where;
+    }
+
+    sql += ` ORDER BY name ASC`;
+
+    const rows = await prisma.$queryRawUnsafe<any[]>(sql, ...args);
+    const members = rows.map((r) => ({
+      name: String(r.name ?? '').trim(),
+      id: String(r.id ?? ''),
+      account: r.account ? String(r.account) : null,
+      excluded: EXCLUDED_USERS.some((ex) => String(r.name ?? '').includes(ex)),
+    }));
+
+    return { deptName: deptLabel, members, excluded: EXCLUDED_USERS };
   };
 
-  const dept1 = await checkOne(AI_DEPT_WHITELISTS.dept1.names);
-  const dept2 = await checkOne(AI_DEPT_WHITELISTS.dept2.names);
+  const dept1 = await loadDept(dept1Id, 'AI專案一部');
+  const dept2 = await loadDept(dept2Id, 'AI專案二部');
 
   return Response.json({
     includeDisabled,
-    user_table: m.tables.user,
-    display_name_column: m.user.displayName,
-    results: {
-      dept1: { deptName: AI_DEPT_WHITELISTS.dept1.deptName, ...dept1 },
-      dept2: { deptName: AI_DEPT_WHITELISTS.dept2.deptName, ...dept2 }
-    }
+    mode: 'database-driven',
+    excluded_users: EXCLUDED_USERS,
+    results: { dept1, dept2 }
   });
 }
-
-
