@@ -84,16 +84,16 @@ export async function getUserActiveFilter(tableName: string, alias: string) {
 
   const col = `${alias}.${sqlId(picked.column)}`;
 
-  // Heuristic: treat NULL as active (avoid accidentally hiding everyone)
+  // Strict mode: only show explicitly enabled users (NULL = not active)
   if (picked.kind === 'enabled') {
     return {
       column: picked.column,
-      where: ` AND (${col} IS NULL OR ${col} IN (1,'1','Y','y','true','TRUE','T'))`,
+      where: ` AND ${col} IN (1,'1','Y','y','true','TRUE','T')`,
       args: [] as any[]
     };
   }
 
-  // disabled/deleted columns: 0/false/N means active
+  // disabled/deleted columns: must be explicitly 0/false/N to be considered active
   return {
     column: picked.column,
     where: ` AND (${col} IS NULL OR ${col} IN (0,'0','N','n','false','FALSE','F'))`,
