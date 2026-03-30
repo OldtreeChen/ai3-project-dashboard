@@ -3,41 +3,49 @@ import { getEcpMapping, sqlId } from '@/lib/ecpSchema';
 
 export type DeptWhitelist = { deptName: string; emails: string[]; names: string[] };
 
-// Excluded users (not shown in any dashboard)
-// These users have FEnabled=1 in DB but are actually inactive
-export const EXCLUDED_USERS: string[] = [
-  '陳慕霖',
-  '陳治瑋',
-  '沈子欽',
-  '丁奕荳',
-  '吳宗憲',
-  '吳柚彤',
-  '呂思潁',
-  '周禹丞',
-  '廖偉彤',
-  '周儀',
-  '張銘介',
-  '張達明',
-  '徐珮芳',
-  '李若菲',
-  '游志鴻',
-  '范綱恒',
-  '葉后儀',
-  '蔡佳晏',
-  '許光軒',
-  '許如蕙',
-  '邱欣怡',
-  '何子杰',
-  '吳佳勳',
-  '廖冠富',
-  '江昱儒',
-  '江浩志',
-  '胡妤安',
-  '范光典',
-  '葉德懋',
-  '董妙珍',
-  '鄭淑娟',
-  '陳建翔',
+// Excluded users: { name, dept? }
+// If dept is specified, only exclude from that department
+// If dept is omitted, exclude from all departments
+type ExcludedUser = { name: string; dept?: 'dept1' | 'dept2' };
+
+export const EXCLUDED_USERS: ExcludedUser[] = [
+  // 全部門排除
+  { name: '陳慕霖' },
+  { name: '陳治瑋' },
+  { name: '沈子欽' },
+  { name: '丁奕荳' },
+  { name: '吳宗憲' },
+  { name: '吳柚彤' },
+  { name: '呂思潁' },
+  { name: '周禹丞' },
+  { name: '廖偉彤' },
+  { name: '周儀' },
+  { name: '張銘介' },
+  { name: '張達明' },
+  { name: '徐珮芳' },
+  { name: '李若菲' },
+  { name: '游志鴻' },
+  { name: '范綱恒' },
+  { name: '葉后儀' },
+  { name: '蔡佳晏' },
+  { name: '許光軒' },
+  { name: '許如蕙' },
+  { name: '邱欣怡' },
+  { name: '何子杰' },
+  { name: '吳佳勳' },
+  { name: '廖冠富' },
+  { name: '江昱儒' },
+  { name: '江浩志' },
+  { name: '胡妤安' },
+  { name: '范光典' },
+  { name: '葉德懋' },
+  { name: '董妙珍' },
+  { name: '鄭淑娟' },
+  { name: '陳建翔' },
+  { name: '葉修文' },
+  { name: '王諠傑' },
+  // 僅排除特定部門
+  { name: '廖明信', dept: 'dept1' },  // 專案一部排除，二部保留
 ];
 
 const globalCache = globalThis as unknown as {
@@ -109,9 +117,19 @@ export function buildWhitelistWhere(opts: {
   // Exclude specific users
   if (EXCLUDED_USERS.length > 0) {
     const baseNameExpr = `TRIM(SUBSTRING_INDEX(SUBSTRING_INDEX(u.${uName}, '（', 1), '(', 1))`;
-    for (const name of EXCLUDED_USERS) {
-      where += ` AND ${baseNameExpr} != ?`;
-      args.push(name);
+    for (const ex of EXCLUDED_USERS) {
+      if (!ex.dept) {
+        // Exclude from all departments
+        where += ` AND ${baseNameExpr} != ?`;
+        args.push(ex.name);
+      } else if (uDeptId) {
+        // Exclude only from specific department
+        const targetDeptId = ex.dept === 'dept1' ? dept1Id : dept2Id;
+        if (targetDeptId) {
+          where += ` AND NOT (${baseNameExpr} = ? AND u.${uDeptId} = ?)`;
+          args.push(ex.name, targetDeptId);
+        }
+      }
     }
   }
 

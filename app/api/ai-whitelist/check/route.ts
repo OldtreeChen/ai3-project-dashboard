@@ -28,7 +28,7 @@ export async function GET(req: Request) {
 
   const { dept1Id, dept2Id } = await getAiDeptIds();
 
-  const loadDept = async (deptId: string | null, deptLabel: string) => {
+  const loadDept = async (deptId: string | null, deptLabel: string, deptKey: 'dept1' | 'dept2') => {
     if (!deptId || !uDeptId) return { deptName: deptLabel, members: [], excluded: EXCLUDED_USERS };
 
     let sql = `
@@ -57,14 +57,19 @@ export async function GET(req: Request) {
       name: String(r.name ?? '').trim(),
       id: String(r.id ?? ''),
       account: r.account ? String(r.account) : null,
-      excluded: EXCLUDED_USERS.some((ex) => String(r.name ?? '').includes(ex)),
+      excluded: EXCLUDED_USERS.some((ex) => {
+        const nameMatch = String(r.name ?? '').includes(ex.name);
+        if (!nameMatch) return false;
+        if (!ex.dept) return true;
+        return ex.dept === deptKey;
+      }),
     }));
 
     return { deptName: deptLabel, members, excluded: EXCLUDED_USERS };
   };
 
-  const dept1 = await loadDept(dept1Id, 'AI專案一部');
-  const dept2 = await loadDept(dept2Id, 'AI專案二部');
+  const dept1 = await loadDept(dept1Id, 'AI專案一部', 'dept1');
+  const dept2 = await loadDept(dept2Id, 'AI專案二部', 'dept2');
 
   return Response.json({
     includeDisabled,
