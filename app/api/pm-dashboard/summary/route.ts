@@ -102,7 +102,7 @@ export async function GET(req: Request) {
         // exclude specific users (scoped to PM dashboard)
         const excludedList = getExcludedForScope('pm');
         if (excludedList.length > 0) {
-          const baseNameExpr = `TRIM(SUBSTRING_INDEX(SUBSTRING_INDEX(u.${uName}, '（', 1), '(', 1))`;
+          const baseNameExpr = `TRIM(SUBSTRING_INDEX(SUBSTRING_INDEX(SUBSTRING_INDEX(u.${uName}, '（', 1), '(', 1), '-', 1))`;
           for (const ex of excludedList) {
             if (!ex.dept) {
               outerWhere += ` AND ${baseNameExpr} != ?`;

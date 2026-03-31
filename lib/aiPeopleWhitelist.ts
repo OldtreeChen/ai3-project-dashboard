@@ -132,7 +132,7 @@ export function buildWhitelistWhere(opts: {
   // Exclude specific users (filtered by scope)
   const excludedList = getExcludedForScope(scope);
   if (excludedList.length > 0) {
-    const baseNameExpr = `TRIM(SUBSTRING_INDEX(SUBSTRING_INDEX(u.${uName}, '（', 1), '(', 1))`;
+    const baseNameExpr = `TRIM(SUBSTRING_INDEX(SUBSTRING_INDEX(SUBSTRING_INDEX(u.${uName}, '（', 1), '(', 1), '-', 1))`;
     for (const ex of excludedList) {
       if (!ex.dept) {
         where += ` AND ${baseNameExpr} != ?`;
