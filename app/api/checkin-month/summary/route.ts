@@ -124,7 +124,8 @@ export async function GET(req: Request) {
       uAccount: uAccount ? String(uAccount) : null,
       departmentId: departmentId || null,
       dept1Id,
-      dept2Id
+      dept2Id,
+      scope: 'checkin',
     });
 
     // Single JOIN query: users LEFT JOIN checkin

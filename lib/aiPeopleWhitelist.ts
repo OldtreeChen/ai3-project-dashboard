@@ -3,14 +3,15 @@ import { getEcpMapping, sqlId } from '@/lib/ecpSchema';
 
 export type DeptWhitelist = { deptName: string; emails: string[]; names: string[] };
 
-// Excluded users: { name, dept? }
-// If dept is specified, only exclude from that department
-// If dept is omitted, exclude from all departments
-type ExcludedUser = { name: string; dept?: 'dept1' | 'dept2' };
+// Excluded users: { name, dept?, excludeFrom? }
+// dept: only exclude from that department (omit = all depts)
+// excludeFrom: array of dashboard scopes to exclude from (omit = all scopes)
+// Scopes: 'pm' | 'dept-month' | 'attendance' | 'checkin' | 'project' | 'people'
+export type DashboardScope = 'pm' | 'dept-month' | 'attendance' | 'checkin' | 'project' | 'people';
+type ExcludedUser = { name: string; dept?: 'dept1' | 'dept2'; excludeFrom?: DashboardScope[] };
 
 export const EXCLUDED_USERS: ExcludedUser[] = [
-  // 全部門排除
-  { name: '陳治瑋' },
+  // 全部門、全儀表板排除
   { name: '沈子欽' },
   { name: '丁奕荳' },
   { name: '吳宗憲' },
@@ -30,23 +31,38 @@ export const EXCLUDED_USERS: ExcludedUser[] = [
   { name: '許光軒' },
   { name: '許如蕙' },
   { name: '邱欣怡' },
-  { name: '何子杰' },
-  { name: '吳佳勳' },
-  { name: '廖冠富' },
-  { name: '江昱儒' },
-  { name: '江浩志' },
-  { name: '胡妤安' },
   { name: '葉德懋' },
   { name: '董妙珍' },
   { name: '鄭淑娟' },
   { name: '陳建翔' },
   { name: '葉修文' },
+  // 僅排除 PM/專案相關儀表板，納入 dept-month/attendance/checkin
+  { name: '何子杰', excludeFrom: ['pm', 'project', 'people'] },
+  { name: '吳佳勳', excludeFrom: ['pm', 'project', 'people'] },
+  { name: '廖冠富', excludeFrom: ['pm', 'project', 'people'] },
+  { name: '江昱儒', excludeFrom: ['pm', 'project', 'people'] },
+  { name: '江浩志', excludeFrom: ['pm', 'project', 'people'] },
+  { name: '胡妤安', excludeFrom: ['pm', 'project', 'people'] },
+  // 僅排除 dept-month/attendance/checkin，納入 PM 負載彙總表
+  { name: '陳治瑋', excludeFrom: ['dept-month', 'attendance', 'checkin', 'people'] },
+  { name: '陳慕霖', excludeFrom: ['dept-month', 'attendance', 'checkin', 'people'] },
   // 僅排除特定部門
   { name: '廖明信', dept: 'dept1' },  // 專案一部排除，二部保留
-  { name: '陳慕霖', dept: 'dept2' },  // 專案二部排除，一部保留
   { name: '鄭翔之', dept: 'dept1' },  // 專案一部排除
   { name: '高仲揚', dept: 'dept1' },  // 專案一部排除
 ];
+
+/**
+ * Filter EXCLUDED_USERS by dashboard scope.
+ * Returns only users that should be excluded for the given scope.
+ */
+export function getExcludedForScope(scope?: DashboardScope): ExcludedUser[] {
+  if (!scope) return EXCLUDED_USERS; // no scope = exclude all
+  return EXCLUDED_USERS.filter((ex) => {
+    if (!ex.excludeFrom) return true; // no excludeFrom = exclude from all scopes
+    return ex.excludeFrom.includes(scope);
+  });
+}
 
 const globalCache = globalThis as unknown as {
   __aiDeptIds?: { dept1Id: string | null; dept2Id: string | null };
@@ -90,19 +106,18 @@ export function buildWhitelistWhere(opts: {
   departmentId: string | null;
   dept1Id: string | null;
   dept2Id: string | null;
+  scope?: DashboardScope;
 }) {
-  const { uName, uDeptId, departmentId, dept1Id, dept2Id } = opts;
+  const { uName, uDeptId, departmentId, dept1Id, dept2Id, scope } = opts;
   const args: any[] = [];
   let where = '';
 
   // Department-based filtering using DB column
   if (uDeptId) {
     if (departmentId) {
-      // Filter by specific department
       where += ` AND u.${uDeptId} = ?`;
       args.push(departmentId);
     } else if (dept1Id && dept2Id) {
-      // Default: show both AI departments
       where += ` AND u.${uDeptId} IN (?, ?)`;
       args.push(dept1Id, dept2Id);
     } else if (dept1Id) {
@@ -114,16 +129,15 @@ export function buildWhitelistWhere(opts: {
     }
   }
 
-  // Exclude specific users
-  if (EXCLUDED_USERS.length > 0) {
+  // Exclude specific users (filtered by scope)
+  const excludedList = getExcludedForScope(scope);
+  if (excludedList.length > 0) {
     const baseNameExpr = `TRIM(SUBSTRING_INDEX(SUBSTRING_INDEX(u.${uName}, '（', 1), '(', 1))`;
-    for (const ex of EXCLUDED_USERS) {
+    for (const ex of excludedList) {
       if (!ex.dept) {
-        // Exclude from all departments
         where += ` AND ${baseNameExpr} != ?`;
         args.push(ex.name);
       } else if (uDeptId) {
-        // Exclude only from specific department
         const targetDeptId = ex.dept === 'dept1' ? dept1Id : dept2Id;
         if (targetDeptId) {
           where += ` AND NOT (${baseNameExpr} = ? AND u.${uDeptId} = ?)`;

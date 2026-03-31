@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { getEcpMapping, sqlId } from '@/lib/ecpSchema';
 import { getProjectOwnerColumn } from '@/lib/projectOwner';
-import { EXCLUDED_USERS } from '@/lib/aiPeopleWhitelist';
+import { getExcludedForScope } from '@/lib/aiPeopleWhitelist';
 import { getUserActiveFilter } from '@/lib/userActive';
 import { parseIdParam } from '../_utils';
 
@@ -66,10 +66,11 @@ export async function GET(req: Request) {
   const active = await getUserActiveFilter(m.tables.user, 'u');
   where += active.where;
 
-  // exclude specific users
-  if (EXCLUDED_USERS.length > 0) {
+  // exclude specific users (scoped to PM dashboard)
+  const excludedList = getExcludedForScope('pm');
+  if (excludedList.length > 0) {
     const baseNameExpr = `TRIM(SUBSTRING_INDEX(SUBSTRING_INDEX(u.${uName}, '（', 1), '(', 1))`;
-    for (const ex of EXCLUDED_USERS) {
+    for (const ex of excludedList) {
       if (!ex.dept) {
         where += ` AND ${baseNameExpr} != ?`;
         args.push(ex.name);
