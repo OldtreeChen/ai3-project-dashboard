@@ -44,6 +44,8 @@ export const EXCLUDED_USERS: ExcludedUser[] = [
   // 僅排除特定部門
   { name: '廖明信', dept: 'dept1' },  // 專案一部排除，二部保留
   { name: '陳慕霖', dept: 'dept2' },  // 專案二部排除，一部保留
+  { name: '鄭翔之', dept: 'dept1' },  // 專案一部排除
+  { name: '高仲揚', dept: 'dept1' },  // 專案一部排除
 ];
 
 const globalCache = globalThis as unknown as {
