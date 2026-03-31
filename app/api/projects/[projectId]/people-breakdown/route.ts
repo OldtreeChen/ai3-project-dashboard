@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { getEcpMapping, sqlId } from '@/lib/ecpSchema';
+import { getUserActiveFilter } from '@/lib/userActive';
 import { parseDateParam, parseIdParam } from '../../../_utils';
 
 export const dynamic = 'force-dynamic';
@@ -28,6 +29,9 @@ export async function GET(req: Request, ctx: { params: Promise<{ projectId: stri
   const uName = sqlId(m.user.displayName);
   const uDeptId = m.user.departmentId ? sqlId(m.user.departmentId) : null;
 
+  // exclude disabled/deleted users
+  const active = await getUserActiveFilter(m.tables.user, 'u');
+
   // 依「任務本身的 actualHours」做彙總（不受日期篩選影響）
   const hoursExpr = tHours ? `COALESCE(SUM(t.${tHours}), 0)` : '0';
   let sql = `
@@ -39,6 +43,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ projectId: stri
     FROM ${T} t
     ${tExecutor ? `LEFT JOIN ${U} u ON u.${uId} = t.${tExecutor}` : ''}
     WHERE t.${tProjectId} = ?
+      ${tExecutor ? active.where : ''}
       ${personId && tExecutor ? `AND t.${tExecutor} = ?` : ''}
       ${departmentId && uDeptId && tExecutor ? `AND u.${uDeptId} = ?` : ''}
     GROUP BY ${tExecutor ? `t.${tExecutor}` : 't.' + tId}

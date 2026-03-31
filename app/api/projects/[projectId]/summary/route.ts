@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { getEcpMapping, sqlId } from '@/lib/ecpSchema';
+import { getUserActiveFilter } from '@/lib/userActive';
 import { parseDateParam, parseIdParam } from '../../../_utils';
 
 export const dynamic = 'force-dynamic';
@@ -79,6 +80,9 @@ export async function GET(req: Request, ctx: { params: Promise<{ projectId: stri
       (await prisma.$queryRawUnsafe<Array<{ actual_hours: number }>>(projectActualSql, projectId))?.[0]?.actual_hours ?? 0
     );
 
+    // exclude disabled/deleted users
+    const active = await getUserActiveFilter(m.tables.user, 'pe');
+
     // 2) 人數：仍用工時填報（可選日期/人員/部門）
     let peopleSql = `
       SELECT COUNT(DISTINCT te.${tdUserId}) AS people_count
@@ -86,6 +90,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ projectId: stri
       JOIN ${T} t ON t.${tId} = te.${tdTaskId}
       JOIN ${U} pe ON pe.${uId} = te.${tdUserId}
       WHERE t.${tProjectId} = ?
+        ${active.where}
     `;
     const args: Array<string> = [projectId];
     if (from && to && TH && thId && thDate && tdTimeReportId) {

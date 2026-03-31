@@ -1,6 +1,8 @@
 import { prisma } from '@/lib/prisma';
 import { getEcpMapping, sqlId } from '@/lib/ecpSchema';
 import { getProjectOwnerColumn } from '@/lib/projectOwner';
+import { EXCLUDED_USERS } from '@/lib/aiPeopleWhitelist';
+import { getUserActiveFilter } from '@/lib/userActive';
 import { parseIdParam } from '../_utils';
 
 export const dynamic = 'force-dynamic';
@@ -58,6 +60,21 @@ export async function GET(req: Request) {
     joinDept = `LEFT JOIN ${D} d ON d.${dId} = u.${uDeptId}`;
     where += ` AND (d.${dName} LIKE ? OR d.${dName} LIKE ?)`;
     args.push('%AI專案一部%', '%AI專案二部%');
+  }
+
+  // exclude disabled/deleted users
+  const active = await getUserActiveFilter(m.tables.user, 'u');
+  where += active.where;
+
+  // exclude specific users
+  if (EXCLUDED_USERS.length > 0) {
+    const baseNameExpr = `TRIM(SUBSTRING_INDEX(SUBSTRING_INDEX(u.${uName}, '（', 1), '(', 1))`;
+    for (const ex of EXCLUDED_USERS) {
+      if (!ex.dept) {
+        where += ` AND ${baseNameExpr} != ?`;
+        args.push(ex.name);
+      }
+    }
   }
 
   const sql = `

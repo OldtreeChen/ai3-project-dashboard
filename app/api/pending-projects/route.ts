@@ -4,6 +4,7 @@ import { getProjectOwnerColumn } from '@/lib/projectOwner';
 import { getProjectTypeColumn } from '@/lib/projectType';
 import { getProjectTypeTextsByValues } from '@/lib/projectTypeDictionary';
 import { getProjectStatusTextsByValues } from '@/lib/projectStatusDictionary';
+import { getUserActiveFilter } from '@/lib/userActive';
 import { parseIdParam, parseIntParam } from '../_utils';
 
 export const dynamic = 'force-dynamic';
@@ -81,7 +82,7 @@ export async function GET(req: Request) {
       ${pType ? `p.${pType} AS project_type_raw` : `NULL AS project_type_raw`}
     FROM ${P} p
     ${pOwner ? `LEFT JOIN ${U} owner ON owner.${uId} = p.${pOwner}` : ''}
-    ${where}
+    ${where}${pOwner ? (await getUserActiveFilter(m.tables.user, 'owner')).where : ''}
     ORDER BY p.${pId} DESC
     LIMIT ${Math.min(limit, 2000)}
   `;

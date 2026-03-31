@@ -3,6 +3,8 @@ import { getEcpMapping, sqlId } from '@/lib/ecpSchema';
 import { getProjectTypeTextsByValues } from '@/lib/projectTypeDictionary';
 import { getProjectOwnerColumn } from '@/lib/projectOwner';
 import { getProjectTypeColumn } from '@/lib/projectType';
+import { EXCLUDED_USERS } from '@/lib/aiPeopleWhitelist';
+import { getUserActiveFilter } from '@/lib/userActive';
 import { parseIdParam } from '@/app/api/_utils';
 
 export const dynamic = 'force-dynamic';
@@ -92,6 +94,24 @@ export async function GET(req: Request) {
       ) x
       LEFT JOIN ${U} u ON u.${uId} = x.owner_id
       ${D && dId && dName && uDeptId ? `LEFT JOIN ${D} d ON d.${dId} = u.${uDeptId}` : ''}
+      ${await (async () => {
+        // exclude disabled/deleted users
+        const active = await getUserActiveFilter(m.tables.user, 'u');
+        outerWhere += active.where;
+
+        // exclude specific users
+        if (EXCLUDED_USERS.length > 0) {
+          const baseNameExpr = `TRIM(SUBSTRING_INDEX(SUBSTRING_INDEX(u.${uName}, '（', 1), '(', 1))`;
+          for (const ex of EXCLUDED_USERS) {
+            if (!ex.dept) {
+              outerWhere += ` AND ${baseNameExpr} != ?`;
+              args.push(ex.name);
+            }
+          }
+        }
+
+        return '';
+      })()}
       ${(() => {
         // owners must be from AI專案一部/二部 (by owner department name)
         if (D && dId && dName && uDeptId) {

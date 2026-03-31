@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma';
 import { getEcpMapping, sqlId } from '@/lib/ecpSchema';
 import { getTaskPlannedEndAtColumn } from '@/lib/taskPlannedEndAt';
 import { getTaskPlannedHoursColumn } from '@/lib/taskPlannedHours';
+import { getUserActiveFilter } from '@/lib/userActive';
 import { parseDateParam, parseIdParam } from '../../../_utils';
 
 export const dynamic = 'force-dynamic';
@@ -47,6 +48,9 @@ export async function GET(req: Request, ctx: { params: Promise<{ projectId: stri
   const uName = sqlId(m.user.displayName);
   const uDeptId = m.user.departmentId ? sqlId(m.user.departmentId) : null;
 
+  // exclude disabled/deleted users
+  const active = await getUserActiveFilter(m.tables.user, 'execu');
+
   const plannedExpr = tPlanned ? `COALESCE(t.${tPlanned}, 0)` : '0';
   const actualExpr = tHours ? `COALESCE(t.${tHours}, 0)` : '0';
 
@@ -81,6 +85,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ projectId: stri
       ${reportedSubquery}
     ) x ON x.task_id = t.${tId}
     WHERE t.${tProjectId} = ?
+      ${tExecutor ? active.where : ''}
       ${personId && tExecutor ? `AND t.${tExecutor} = ?` : ''}
     ORDER BY
       ${tPlanEnd ? `planned_end_at DESC,` : ''}
