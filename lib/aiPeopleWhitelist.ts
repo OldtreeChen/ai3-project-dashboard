@@ -10,7 +10,6 @@ type ExcludedUser = { name: string; dept?: 'dept1' | 'dept2' };
 
 export const EXCLUDED_USERS: ExcludedUser[] = [
   // 全部門排除
-  { name: '陳慕霖' },
   { name: '陳治瑋' },
   { name: '沈子欽' },
   { name: '丁奕荳' },
@@ -37,15 +36,14 @@ export const EXCLUDED_USERS: ExcludedUser[] = [
   { name: '江昱儒' },
   { name: '江浩志' },
   { name: '胡妤安' },
-  { name: '范光典' },
   { name: '葉德懋' },
   { name: '董妙珍' },
   { name: '鄭淑娟' },
   { name: '陳建翔' },
   { name: '葉修文' },
-  { name: '王諠傑' },
   // 僅排除特定部門
   { name: '廖明信', dept: 'dept1' },  // 專案一部排除，二部保留
+  { name: '陳慕霖', dept: 'dept2' },  // 專案二部排除，一部保留
 ];
 
 const globalCache = globalThis as unknown as {
