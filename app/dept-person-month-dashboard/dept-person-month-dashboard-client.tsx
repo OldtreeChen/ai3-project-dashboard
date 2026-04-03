@@ -101,8 +101,8 @@ export default function DeptPersonMonthDashboardClient() {
   const [tasks, setTasks] = useState<TaskRow[]>([]);
 
   // 每月應完成工時：上班日 * 8 小時 * 0.8
-  const workdays = useMemo(() => getWorkdaysInMonth(month), [month]);
-  const expectedHours = useMemo(() => workdays * 8 * 0.8, [workdays]);
+  const [workdayCount, setWorkdayCount] = useState(0);
+  const expectedHours = useMemo(() => workdayCount * 8 * 0.8, [workdayCount]);
 
   const totals = useMemo(() => {
     const peopleCount = rows.length;
@@ -154,8 +154,9 @@ export default function DeptPersonMonthDashboardClient() {
     setError('');
     try {
       const q = buildQuery({ month, departmentId });
-      const data = await apiGet<{ people: SummaryRow[] }>(`/api/dept-person-month/summary${q}`);
+      const data = await apiGet<{ people: SummaryRow[]; workday_count?: number }>(`/api/dept-person-month/summary${q}`);
       setRows(data.people || []);
+      setWorkdayCount(data.workday_count || getWorkdaysInMonth(month));
       setSelectedPersonId('');
       setTasks([]);
       setTasksError('');
@@ -236,7 +237,7 @@ export default function DeptPersonMonthDashboardClient() {
             {loading ? '查詢中…' : '重新整理'}
           </button>
           <span className="badge" style={{ marginLeft: 6 }}>
-            上班日 {workdays} 天｜應完成 {fmtHours(expectedHours)}h
+            上班日 {workdayCount} 天｜應完成 {fmtHours(expectedHours)}h
           </span>
         </div>
 

@@ -6,6 +6,7 @@ import { getTaskPlannedHoursColumn } from '@/lib/taskPlannedHours';
 import { getTaskPlannedEndAtColumn } from '@/lib/taskPlannedEndAt';
 import { getTaskPlannedStartAtColumn } from '@/lib/taskPlannedStartAt';
 import { buildWhitelistWhere, getAiDeptIds } from '@/lib/aiPeopleWhitelist';
+import { getWorkdays as getTwWorkdays } from '@/lib/taiwanHolidays';
 import { parseIdParam } from '../../_utils';
 
 export const dynamic = 'force-dynamic';
@@ -219,9 +220,12 @@ export async function GET(req: Request) {
     void P;
     void tProjectId;
 
+    const workdays = await getTwWorkdays(month.yyyy, month.mm);
+
     return Response.json({
       month: `${String(month.yyyy)}-${String(month.mm).padStart(2, '0')}`,
       date_range: { from: month.start, to_exclusive: month.end },
+      workday_count: workdays.length,
       received_at_column: { table: m.tables.task, column: receivedAtCol },
       planned_hours_column: { table: m.tables.task, column: plannedHoursCol },
       planned_start_column: { table: m.tables.task, column: plannedStartCol },

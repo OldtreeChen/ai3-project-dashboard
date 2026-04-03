@@ -27,6 +27,7 @@ type SummaryResponse = {
   month: string;
   allDays: string[];
   workdays: string[];
+  holidays?: Record<string, string>;
   people: PersonRow[];
 };
 
@@ -91,6 +92,7 @@ export default function CheckinMonthDashboardClient() {
   const [error, setError] = useState('');
   const [allDays, setAllDays] = useState<string[]>([]);
   const [workdaySet, setWorkdaySet] = useState<Set<string>>(new Set());
+  const [holidays, setHolidays] = useState<Record<string, string>>({});
   const [people, setPeople] = useState<PersonRow[]>([]);
 
   const workdayCount = useMemo(() => workdaySet.size, [workdaySet]);
@@ -128,6 +130,7 @@ export default function CheckinMonthDashboardClient() {
       const data = await apiGet<SummaryResponse>(`/api/checkin-month/summary${q}`);
       setAllDays(data.allDays || data.workdays || []);
       setWorkdaySet(new Set(data.workdays || []));
+      setHolidays(data.holidays || {});
       setPeople(data.people || []);
     } catch (e: any) {
       setError(e?.message || '查詢失敗');
@@ -264,14 +267,16 @@ export default function CheckinMonthDashboardClient() {
                     <th className="att-table__sticky-days num">打卡天</th>
                     <th className="att-table__sticky-hours num">遲到</th>
                     {allDays.map((d) => {
-                      const we = isWeekend(d);
+                      const hol = holidays[d];
+                      const isOff = !workdaySet.has(d);
                       return (
                         <th
                           key={d}
-                          className={`att-table__day num${isToday(d) ? ' att-table__day--today' : ''}${we ? ' att-table__day--weekend' : ''}`}
+                          className={`att-table__day num${isToday(d) ? ' att-table__day--today' : ''}${isOff ? ' att-table__day--weekend' : ''}`}
+                          title={hol || undefined}
                         >
                           <div>{dayLabel(d)}</div>
-                          <div className="att-table__weekday">{weekdayLabel(d)}</div>
+                          <div className="att-table__weekday">{hol ? '假' : weekdayLabel(d)}</div>
                         </th>
                       );
                     })}
@@ -309,10 +314,11 @@ export default function CheckinMonthDashboardClient() {
                           {allDays.map((d) => {
                             const ci = p.days[d];
                             const past = isPast(d) || isToday(d);
-                            const we = isWeekend(d);
                             const isWork = workdaySet.has(d);
+                            const isOff = !isWork;
+                            const hol = holidays[d];
                             let cls = 'att-cell';
-                            if (we) {
+                            if (isOff) {
                               cls += ci ? ' att-cell--weekend-has' : ' att-cell--weekend';
                             } else if (!past) {
                               cls += ' att-cell--future';
@@ -325,6 +331,7 @@ export default function CheckinMonthDashboardClient() {
 
                             // Tooltip
                             const tipParts = [p.display_name, `${d} (${weekdayLabel(d)})`];
+                            if (hol) tipParts.push(hol);
                             if (ci) {
                               if (ci.clock_in) tipParts.push(`上班: ${ci.clock_in}`);
                               if (ci.clock_out) tipParts.push(`下班: ${ci.clock_out}`);
@@ -332,7 +339,7 @@ export default function CheckinMonthDashboardClient() {
                               if (ci.leave_early_minutes && ci.leave_early_minutes > 0) tipParts.push(`早退 ${ci.leave_early_minutes} 分鐘`);
                               tipParts.push(`打卡 ${ci.punch_count} 次`);
                             } else {
-                              tipParts.push(we ? '假日' : past ? '未打卡' : '未到');
+                              tipParts.push(isOff ? (hol || '假日') : past ? '未打卡' : '未到');
                             }
 
                             // Cell content

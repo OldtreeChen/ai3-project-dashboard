@@ -19,6 +19,7 @@ type SummaryResponse = {
   month: string;
   allDays: string[];
   workdays: string[];
+  holidays?: Record<string, string>; // date -> description
   people: PersonRow[];
 };
 
@@ -89,6 +90,7 @@ export default function AttendanceMonthDashboardClient() {
   const [error, setError] = useState('');
   const [allDays, setAllDays] = useState<string[]>([]);
   const [workdaySet, setWorkdaySet] = useState<Set<string>>(new Set());
+  const [holidays, setHolidays] = useState<Record<string, string>>({});
   const [people, setPeople] = useState<PersonRow[]>([]);
 
   const workdayCount = useMemo(() => workdaySet.size, [workdaySet]);
@@ -126,6 +128,7 @@ export default function AttendanceMonthDashboardClient() {
       const data = await apiGet<SummaryResponse>(`/api/attendance-month/summary${q}`);
       setAllDays(data.allDays || data.workdays || []);
       setWorkdaySet(new Set(data.workdays || []));
+      setHolidays(data.holidays || {});
       setPeople(data.people || []);
     } catch (e: any) {
       setError(e?.message || '查詢失敗');
@@ -255,13 +258,16 @@ export default function AttendanceMonthDashboardClient() {
                     <th className="att-table__sticky-hours num">總時數</th>
                     {allDays.map((d) => {
                       const we = isWeekend(d);
+                      const hol = holidays[d];
+                      const isOff = we || hol !== undefined;
                       return (
                         <th
                           key={d}
-                          className={`att-table__day num${isToday(d) ? ' att-table__day--today' : ''}${we ? ' att-table__day--weekend' : ''}`}
+                          className={`att-table__day num${isToday(d) ? ' att-table__day--today' : ''}${isOff ? ' att-table__day--weekend' : ''}`}
+                          title={hol || undefined}
                         >
                           <div>{dayLabel(d)}</div>
-                          <div className="att-table__weekday">{weekdayLabel(d)}</div>
+                          <div className="att-table__weekday">{hol ? '假' : weekdayLabel(d)}</div>
                         </th>
                       );
                     })}
@@ -288,10 +294,11 @@ export default function AttendanceMonthDashboardClient() {
                           {allDays.map((d) => {
                             const hours = p.days[d] || 0;
                             const past = isPast(d) || isToday(d);
-                            const we = isWeekend(d);
                             const isWork = workdaySet.has(d);
+                            const hol = holidays[d];
+                            const isOff = !isWork;
                             let cls = 'att-cell';
-                            if (we) {
+                            if (isOff) {
                               cls += hours > 0 ? ' att-cell--weekend-has' : ' att-cell--weekend';
                             } else if (!past) {
                               cls += ' att-cell--future';
@@ -300,7 +307,7 @@ export default function AttendanceMonthDashboardClient() {
                             } else {
                               cls += ' att-cell--miss';
                             }
-                            const tipLabel = we ? '假日' : hours > 0 ? `${fmtHours(hours)}h` : past ? '未填' : '未到';
+                            const tipLabel = isOff ? (hol || '假日') : hours > 0 ? `${fmtHours(hours)}h` : past ? '未填' : '未到';
                             return (
                               <td
                                 key={d}

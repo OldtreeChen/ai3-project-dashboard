@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma';
 import { getEcpMapping, sqlId } from '@/lib/ecpSchema';
 import { getUserActiveFilter } from '@/lib/userActive';
 import { buildWhitelistWhere, getAiDeptIds } from '@/lib/aiPeopleWhitelist';
+import { getWorkdays as getTwWorkdays, getHolidayMap } from '@/lib/taiwanHolidays';
 import { parseIdParam } from '../../_utils';
 
 export const dynamic = 'force-dynamic';
@@ -133,7 +134,8 @@ export async function GET(req: Request) {
     const rows = await prisma.$queryRawUnsafe<any[]>(sql, ...args);
 
     const allDays = getAllDays(month.yyyy, month.mm);
-    const workdays = getWorkdays(month.yyyy, month.mm);
+    const workdays = await getTwWorkdays(month.yyyy, month.mm);
+    const holidays = await getHolidayMap(month.yyyy, month.mm);
     const workdaySet = new Set(workdays);
 
     type PersonRecord = {
@@ -212,6 +214,7 @@ export async function GET(req: Request) {
       date_range: { from: month.start, to_exclusive: month.end },
       allDays,
       workdays,
+      holidays,
       filters: { departmentId: departmentId || null },
       people: people.map((p) => ({
         person_id: p.person_id,
