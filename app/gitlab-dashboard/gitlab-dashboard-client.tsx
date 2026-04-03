@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import TopMenu from '../_components/TopMenu';
 
 type LastCommit = {
@@ -9,6 +9,15 @@ type LastCommit = {
   author_name: string;
   committed_date: string;
   message: string;
+  branch?: string;
+};
+
+type BranchInfo = {
+  name: string;
+  is_default: boolean;
+  merged: boolean;
+  protected: boolean;
+  last_commit: LastCommit;
 };
 
 type Project = {
@@ -22,6 +31,8 @@ type Project = {
   group: string;
   group_name: string;
   last_commit: LastCommit | null;
+  branch_count?: number;
+  branches?: BranchInfo[];
 };
 
 type ApiResponse = {
@@ -88,6 +99,16 @@ export default function GitlabDashboardClient() {
   const [sortKey, setSortKey] = useState<SortKey>('last_commit');
   const [sortAsc, setSortAsc] = useState(false);
   const [limit, setLimit] = useState(25);
+  const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
+
+  const toggleExpand = (id: number) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   const loadData = async (fetchLimit?: number) => {
     const l = fetchLimit ?? limit;
@@ -345,6 +366,7 @@ export default function GitlabDashboardClient() {
                     <th className="gitlab-table__sortable" onClick={() => handleSort('name')}>
                       專案名稱{sortIcon('name')}
                     </th>
+                    <th>Branch</th>
                     <th className="gitlab-table__sortable" onClick={() => handleSort('last_commit')}>
                       最後提交時間{sortIcon('last_commit')}
                     </th>
@@ -365,49 +387,109 @@ export default function GitlabDashboardClient() {
                       const commitDate = p.last_commit?.committed_date || p.last_activity_at;
                       const days = daysSince(commitDate);
                       const fresh = freshness(days);
+                      const isExpanded = expandedIds.has(p.id);
+                      const otherBranches = (p.branches || []).filter(
+                        (b) => b.name !== p.last_commit?.branch
+                      );
+                      const hasBranches = otherBranches.length > 0;
                       return (
-                        <tr key={p.id}>
-                          <td className="muted">{idx + 1}</td>
-                          <td>
-                            <span className="gitlab-group">{p.group}</span>
-                          </td>
-                          <td>
-                            <a
-                              href={p.web_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="gitlab-project-link"
-                            >
-                              {p.name}
-                            </a>
-                          </td>
-                          <td className="num">{fmtDate(commitDate)}</td>
-                          <td className="num">{timeAgo(commitDate)}</td>
-                          <td>
-                            <span className={`badge ${fresh.cls}`}>{fresh.label}</span>
-                          </td>
-                          <td>{p.last_commit?.author_name || '--'}</td>
-                          <td className="gitlab-commit-msg" title={p.last_commit?.message || ''}>
-                            {p.last_commit?.message || '--'}
-                          </td>
-                          <td>
-                            {p.last_commit ? (
+                        <React.Fragment key={p.id}>
+                          <tr>
+                            <td className="muted">{idx + 1}</td>
+                            <td>
+                              <span className="gitlab-group">{p.group}</span>
+                            </td>
+                            <td>
                               <a
-                                href={`${p.web_url}/-/commit/${p.last_commit.short_id}`}
+                                href={p.web_url}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="gitlab-commit-id"
+                                className="gitlab-project-link"
                               >
-                                {p.last_commit.short_id}
+                                {p.name}
                               </a>
-                            ) : '--'}
-                          </td>
-                        </tr>
+                            </td>
+                            <td>
+                              {p.last_commit?.branch ? (
+                                <span
+                                  className={`gitlab-branch${hasBranches ? ' gitlab-branch--expandable' : ''}`}
+                                  onClick={hasBranches ? () => toggleExpand(p.id) : undefined}
+                                  title={hasBranches ? `${(p.branch_count || 0)} 個分支，點擊展開` : ''}
+                                >
+                                  {isExpanded ? '▼ ' : hasBranches ? '▶ ' : ''}{p.last_commit.branch}
+                                  {(p.branch_count || 0) > 1 && (
+                                    <span className="gitlab-branch-count">+{(p.branch_count || 1) - 1}</span>
+                                  )}
+                                </span>
+                              ) : (
+                                <span className="muted">--</span>
+                              )}
+                            </td>
+                            <td className="num">{fmtDate(commitDate)}</td>
+                            <td className="num">{timeAgo(commitDate)}</td>
+                            <td>
+                              <span className={`badge ${fresh.cls}`}>{fresh.label}</span>
+                            </td>
+                            <td>{p.last_commit?.author_name || '--'}</td>
+                            <td className="gitlab-commit-msg" title={p.last_commit?.message || ''}>
+                              {p.last_commit?.message || '--'}
+                            </td>
+                            <td>
+                              {p.last_commit ? (
+                                <a
+                                  href={`${p.web_url}/-/commit/${p.last_commit.short_id}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="gitlab-commit-id"
+                                >
+                                  {p.last_commit.short_id}
+                                </a>
+                              ) : '--'}
+                            </td>
+                          </tr>
+                          {isExpanded && otherBranches.map((b) => {
+                            const bDays = daysSince(b.last_commit.committed_date);
+                            const bFresh = freshness(bDays);
+                            return (
+                              <tr key={`${p.id}-${b.name}`} className="gitlab-branch-row">
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td>
+                                  <span className="gitlab-branch gitlab-branch--sub">
+                                    {b.is_default ? '★ ' : ''}{b.name}
+                                    {b.merged && <span className="gitlab-branch-tag">merged</span>}
+                                    {b.protected && <span className="gitlab-branch-tag">protected</span>}
+                                  </span>
+                                </td>
+                                <td className="num">{fmtDate(b.last_commit.committed_date)}</td>
+                                <td className="num">{timeAgo(b.last_commit.committed_date)}</td>
+                                <td>
+                                  <span className={`badge ${bFresh.cls}`}>{bFresh.label}</span>
+                                </td>
+                                <td>{b.last_commit.author_name}</td>
+                                <td className="gitlab-commit-msg" title={b.last_commit.message}>
+                                  {b.last_commit.message}
+                                </td>
+                                <td>
+                                  <a
+                                    href={`${p.web_url}/-/commit/${b.last_commit.short_id}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="gitlab-commit-id"
+                                  >
+                                    {b.last_commit.short_id}
+                                  </a>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </React.Fragment>
                       );
                     })
                   ) : (
                     <tr>
-                      <td colSpan={9} className="muted" style={{ textAlign: 'center' }}>
+                      <td colSpan={10} className="muted" style={{ textAlign: 'center' }}>
                         {loading ? '載入中…' : '無符合條件的專案'}
                       </td>
                     </tr>

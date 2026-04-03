@@ -33,6 +33,14 @@ interface GitLabCommit {
   message: string;
 }
 
+interface GitLabBranch {
+  name: string;
+  default: boolean;
+  merged: boolean;
+  protected: boolean;
+  commit: GitLabCommit;
+}
+
 async function fetchProjects(limit: number): Promise<{ projects: GitLabProject[]; totalOnServer: number }> {
   const perPage = Math.min(limit, 100);
   const maxPages = Math.ceil(limit / perPage);
@@ -61,19 +69,17 @@ async function fetchProjects(limit: number): Promise<{ projects: GitLabProject[]
   return { projects: all, totalOnServer: all.length };
 }
 
-async function fetchLastCommit(projectId: number, branch: string | null): Promise<GitLabCommit | null> {
+async function fetchBranches(projectId: number, limit: number = 10): Promise<GitLabBranch[]> {
   try {
-    const ref = branch ? `&ref_name=${encodeURIComponent(branch)}` : '';
-    const url = `${GITLAB_URL}/api/v4/projects/${projectId}/repository/commits?per_page=1${ref}`;
+    const url = `${GITLAB_URL}/api/v4/projects/${projectId}/repository/branches?per_page=${limit}&order_by=updated&sort=desc`;
     const res = await fetch(url, {
       headers: { 'PRIVATE-TOKEN': GITLAB_TOKEN },
       signal: AbortSignal.timeout(10000),
     });
-    if (!res.ok) return null;
-    const commits: GitLabCommit[] = await res.json();
-    return commits[0] || null;
+    if (!res.ok) return [];
+    return await res.json();
   } catch {
-    return null;
+    return [];
   }
 }
 
@@ -93,18 +99,27 @@ export async function GET(req: NextRequest) {
     // Filter empty repos
     const active = projects.filter((p) => !p.empty_repo);
 
-    // Fetch last commit in batches of 10
+    // Fetch branches (with latest commits) in batches of 10
     const batchSize = 10;
     const results: any[] = [];
 
     for (let i = 0; i < active.length; i += batchSize) {
       const batch = active.slice(i, i + batchSize);
-      const commits = await Promise.all(
-        batch.map((p) => fetchLastCommit(p.id, p.default_branch))
+      const branchResults = await Promise.all(
+        batch.map((p) => fetchBranches(p.id, 10))
       );
       for (let j = 0; j < batch.length; j++) {
         const p = batch[j];
-        const c = commits[j];
+        const branches = branchResults[j];
+
+        // Sort branches by commit date desc to find the most recent
+        const sortedBranches = branches
+          .filter((b) => b.commit)
+          .sort((a, b) => new Date(b.commit.committed_date).getTime() - new Date(a.commit.committed_date).getTime());
+
+        const latestBranch = sortedBranches[0] || null;
+        const c = latestBranch?.commit || null;
+
         results.push({
           id: p.id,
           name: p.name,
@@ -122,8 +137,23 @@ export async function GET(req: NextRequest) {
                 author_name: c.author_name,
                 committed_date: c.committed_date,
                 message: c.message?.split('\n')[0] || c.title,
+                branch: latestBranch!.name,
               }
             : null,
+          branch_count: branches.length,
+          branches: sortedBranches.map((b) => ({
+            name: b.name,
+            is_default: b.default,
+            merged: b.merged,
+            protected: b.protected,
+            last_commit: {
+              short_id: b.commit.short_id,
+              title: b.commit.title,
+              author_name: b.commit.author_name,
+              committed_date: b.commit.committed_date,
+              message: b.commit.message?.split('\n')[0] || b.commit.title,
+            },
+          })),
         });
       }
     }
