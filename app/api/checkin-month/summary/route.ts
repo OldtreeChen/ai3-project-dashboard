@@ -139,11 +139,13 @@ export async function GET(req: Request) {
         MIN(CASE
           WHEN ci.\`FCheckinType\` = '1'
             OR (ci.\`FCheckinType\` IN ('5','6') AND ci.\`FExType\` = '1')
+            OR (ci.\`FCheckinType\` IN ('5','6') AND ci.\`FExType\` IS NULL AND ci.\`FPreOrReCheckInType\` = '1')
           THEN TIME(ci.\`FPreOrReCheckInDate\`)
         END) AS clock_in,
         MAX(CASE
           WHEN ci.\`FCheckinType\` = '2'
             OR (ci.\`FCheckinType\` IN ('5','6') AND ci.\`FExType\` = '2')
+            OR (ci.\`FCheckinType\` IN ('5','6') AND ci.\`FExType\` IS NULL AND ci.\`FPreOrReCheckInType\` = '2')
           THEN TIME(ci.\`FPreOrReCheckInDate\`)
         END) AS clock_out,
         MAX(CASE WHEN ci.\`FCheckinType\` = '1' THEN ci.\`FLateMinutes\` END) AS late_minutes,
