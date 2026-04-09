@@ -69,9 +69,11 @@ async function fetchProjects(limit: number): Promise<{ projects: GitLabProject[]
   return { projects: all, totalOnServer: all.length };
 }
 
-async function fetchBranches(projectId: number, limit: number = 10): Promise<GitLabBranch[]> {
+async function fetchBranches(projectId: number, limit: number = 20): Promise<GitLabBranch[]> {
   try {
-    const url = `${GITLAB_URL}/api/v4/projects/${projectId}/repository/branches?per_page=${limit}&order_by=updated&sort=desc`;
+    // GitLab branches API only supports order_by=name, not updated
+    // Fetch more branches and sort by commit date client-side
+    const url = `${GITLAB_URL}/api/v4/projects/${projectId}/repository/branches?per_page=${limit}`;
     const res = await fetch(url, {
       headers: { 'PRIVATE-TOKEN': GITLAB_TOKEN },
       signal: AbortSignal.timeout(10000),
