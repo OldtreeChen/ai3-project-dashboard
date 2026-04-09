@@ -6,6 +6,7 @@ const GITLAB_TOKEN = process.env.GITLAB_TOKEN || '';
 interface GitLabProject {
   id: number;
   name: string;
+  description: string | null;
   name_with_namespace: string;
   path_with_namespace: string;
   web_url: string;
@@ -125,6 +126,7 @@ export async function GET(req: NextRequest) {
         results.push({
           id: p.id,
           name: p.name,
+          description: p.description || null,
           name_with_namespace: p.name_with_namespace,
           path_with_namespace: p.path_with_namespace,
           web_url: p.web_url,

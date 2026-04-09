@@ -23,6 +23,7 @@ type BranchInfo = {
 type Project = {
   id: number;
   name: string;
+  description: string | null;
   name_with_namespace: string;
   path_with_namespace: string;
   web_url: string;
@@ -87,7 +88,12 @@ function fmtDate(dateStr: string | null): string {
 
 type SortKey = 'name' | 'group' | 'last_commit' | 'author' | 'days';
 
-const LIMIT_OPTIONS = [25, 50, 100, 200, 500];
+const FETCH_LIMIT_OPTIONS = [50, 100, 200, 500];
+const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
+
+function hasChinese(str: string): boolean {
+  return /[\u4e00-\u9fff\u3400-\u4dbf]/.test(str);
+}
 
 export default function GitlabDashboardClient() {
   const [loading, setLoading] = useState(false);
@@ -98,7 +104,9 @@ export default function GitlabDashboardClient() {
   const [freshnessFilter, setFreshnessFilter] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('last_commit');
   const [sortAsc, setSortAsc] = useState(false);
-  const [limit, setLimit] = useState(25);
+  const [fetchLimit, setFetchLimit] = useState(100);
+  const [pageSize, setPageSize] = useState(25);
+  const [page, setPage] = useState(1);
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
 
   const toggleExpand = (id: number) => {
@@ -110,8 +118,8 @@ export default function GitlabDashboardClient() {
     });
   };
 
-  const loadData = async (fetchLimit?: number) => {
-    const l = fetchLimit ?? limit;
+  const loadData = async (fl?: number) => {
+    const l = fl ?? fetchLimit;
     setLoading(true);
     setError('');
     try {
@@ -122,6 +130,7 @@ export default function GitlabDashboardClient() {
       }
       const json: ApiResponse = await res.json();
       setData(json);
+      setPage(1);
     } catch (e: any) {
       setError(e?.message || '查詢失敗');
     } finally {
@@ -134,8 +143,8 @@ export default function GitlabDashboardClient() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleLimitChange = (newLimit: number) => {
-    setLimit(newLimit);
+  const handleFetchLimitChange = (newLimit: number) => {
+    setFetchLimit(newLimit);
     void loadData(newLimit);
   };
 
@@ -214,6 +223,14 @@ export default function GitlabDashboardClient() {
     return sorted;
   }, [data, search, groupFilter, freshnessFilter, sortKey, sortAsc]);
 
+  // Reset to page 1 whenever filters/sort change
+  useEffect(() => {
+    setPage(1);
+  }, [search, groupFilter, freshnessFilter, sortKey, sortAsc]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const pagedList = filtered.slice((page - 1) * pageSize, page * pageSize);
+
   // Stats
   const stats = useMemo(() => {
     if (!data) return { total: 0, totalOnServer: 0, active: 0, week: 0, month: 0, stale: 0, dead: 0 };
@@ -289,9 +306,17 @@ export default function GitlabDashboardClient() {
             </select>
           </label>
           <label className="field">
-            <span className="field__label">顯示數量</span>
-            <select className="field__control" value={limit} onChange={(e) => handleLimitChange(Number(e.target.value))}>
-              {LIMIT_OPTIONS.map((n) => (
+            <span className="field__label">每頁顯示</span>
+            <select className="field__control" value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}>
+              {PAGE_SIZE_OPTIONS.map((n) => (
+                <option key={n} value={n}>{n} 筆</option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
+            <span className="field__label">載入數量</span>
+            <select className="field__control" value={fetchLimit} onChange={(e) => handleFetchLimitChange(Number(e.target.value))}>
+              {FETCH_LIMIT_OPTIONS.map((n) => (
                 <option key={n} value={n}>{n} 個</option>
               ))}
             </select>
@@ -352,7 +377,9 @@ export default function GitlabDashboardClient() {
         <section className="panel">
           <div className="panel__header">
             <div className="panel__title">專案列表</div>
-            <div className="panel__meta">{loading ? '載入中…' : `${filtered.length} 個專案`}</div>
+            <div className="panel__meta">
+              {loading ? '載入中…' : `共 ${filtered.length} 個專案，第 ${page} / ${totalPages} 頁`}
+            </div>
           </div>
           <div className="panel__body" style={{ padding: 0 }}>
             <div className="att-scroll">
@@ -394,8 +421,9 @@ export default function GitlabDashboardClient() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.length ? (
-                    filtered.map((p, idx) => {
+                  {pagedList.length ? (
+                    pagedList.map((p, idx) => {
+                      const idx0 = (page - 1) * pageSize + idx;
                       const commitDate = p.last_commit?.committed_date || p.last_activity_at;
                       const days = daysSince(commitDate);
                       const fresh = freshness(days);
@@ -407,11 +435,11 @@ export default function GitlabDashboardClient() {
                       return (
                         <React.Fragment key={p.id}>
                           <tr>
-                            <td className="muted">{idx + 1}</td>
+                            <td className="muted">{idx0 + 1}</td>
                             <td title={p.group}>
                               <span className="gitlab-group">{p.group}</span>
                             </td>
-                            <td title={p.name_with_namespace}>
+                            <td title={p.description ? `${p.name_with_namespace}\n${p.description}` : p.name_with_namespace}>
                               <a
                                 href={p.web_url}
                                 target="_blank"
@@ -420,6 +448,9 @@ export default function GitlabDashboardClient() {
                               >
                                 {p.name}
                               </a>
+                              {p.description && hasChinese(p.description) && (
+                                <span className="gitlab-project-desc">{p.description}</span>
+                              )}
                             </td>
                             <td>
                               {p.last_commit?.branch ? (
@@ -501,7 +532,7 @@ export default function GitlabDashboardClient() {
                     })
                   ) : (
                     <tr>
-                      <td colSpan={10} className="muted" style={{ textAlign: 'center' }}>
+                      <td colSpan={10} className="muted" style={{ textAlign: 'center', padding: '24px 0' }}>
                         {loading ? '載入中…' : '無符合條件的專案'}
                       </td>
                     </tr>
@@ -509,6 +540,34 @@ export default function GitlabDashboardClient() {
                 </tbody>
               </table>
             </div>
+            {/* Pagination controls */}
+            {totalPages > 1 && (
+              <div className="gitlab-pagination">
+                <button
+                  className="btn btn--sm"
+                  disabled={page <= 1}
+                  onClick={() => setPage(1)}
+                >«</button>
+                <button
+                  className="btn btn--sm"
+                  disabled={page <= 1}
+                  onClick={() => setPage((p) => p - 1)}
+                >‹ 上一頁</button>
+                <span className="gitlab-pagination__info">
+                  第 {page} / {totalPages} 頁（共 {filtered.length} 筆）
+                </span>
+                <button
+                  className="btn btn--sm"
+                  disabled={page >= totalPages}
+                  onClick={() => setPage((p) => p + 1)}
+                >下一頁 ›</button>
+                <button
+                  className="btn btn--sm"
+                  disabled={page >= totalPages}
+                  onClick={() => setPage(totalPages)}
+                >»</button>
+              </div>
+            )}
           </div>
         </section>
       </main>
