@@ -714,8 +714,9 @@ body{
 .footer-note{ margin-top: 14px; }
 
 /* GitLab dashboard */
-.gitlab-table{ width: 100%; }
-.gitlab-table th{ white-space: nowrap; }
+.gitlab-table{ width: 100%; table-layout: fixed; }
+.gitlab-table th{ white-space: nowrap; overflow: hidden; }
+.gitlab-table td{ overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .gitlab-table__sortable{
   cursor: pointer;
   user-select: none;
@@ -726,22 +727,24 @@ body{
 .gitlab-group{
   font-size: 11px;
   color: var(--muted);
-  max-width: 200px;
+  display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  display: inline-block;
 }
 .gitlab-project-link{
   color: rgba(96,165,250,0.9);
   text-decoration: none;
   font-weight: 600;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .gitlab-project-link:hover{
   text-decoration: underline;
 }
 .gitlab-commit-msg{
-  max-width: 280px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -768,6 +771,8 @@ body{
   font-size: 0.82em;
   color: var(--text);
   white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
 }
 .gitlab-branch--expandable{
   cursor: pointer;

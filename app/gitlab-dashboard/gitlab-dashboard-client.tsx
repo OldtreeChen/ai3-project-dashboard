@@ -357,9 +357,21 @@ export default function GitlabDashboardClient() {
           <div className="panel__body" style={{ padding: 0 }}>
             <div className="att-scroll">
               <table className="table gitlab-table">
+                <colgroup>
+                  <col style={{ width: 36 }} />
+                  <col style={{ width: 88 }} />
+                  <col style={{ width: 148 }} />
+                  <col style={{ width: 118 }} />
+                  <col style={{ width: 126 }} />
+                  <col style={{ width: 72 }} />
+                  <col style={{ width: 62 }} />
+                  <col style={{ width: 88 }} />
+                  <col />
+                  <col style={{ width: 70 }} />
+                </colgroup>
                 <thead>
                   <tr>
-                    <th style={{ width: 40 }}>#</th>
+                    <th>#</th>
                     <th className="gitlab-table__sortable" onClick={() => handleSort('group')}>
                       Group{sortIcon('group')}
                     </th>
@@ -396,10 +408,10 @@ export default function GitlabDashboardClient() {
                         <React.Fragment key={p.id}>
                           <tr>
                             <td className="muted">{idx + 1}</td>
-                            <td>
+                            <td title={p.group}>
                               <span className="gitlab-group">{p.group}</span>
                             </td>
-                            <td>
+                            <td title={p.name_with_namespace}>
                               <a
                                 href={p.web_url}
                                 target="_blank"
@@ -430,7 +442,7 @@ export default function GitlabDashboardClient() {
                             <td>
                               <span className={`badge ${fresh.cls}`}>{fresh.label}</span>
                             </td>
-                            <td>{p.last_commit?.author_name || '--'}</td>
+                            <td title={p.last_commit?.author_name || ''}>{p.last_commit?.author_name || '--'}</td>
                             <td className="gitlab-commit-msg" title={p.last_commit?.message || ''}>
                               {p.last_commit?.message || '--'}
                             </td>
