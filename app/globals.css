@@ -554,13 +554,17 @@ body{
 
 /* Attendance month dashboard: wider content area */
 .content--wide{
-  max-width: 1800px;
-  width: min(1800px, calc(100% - (var(--sidebar-w) + 32px) * 2));
+  max-width: none;
+  width: calc(100% - 16px - var(--sidebar-w) - 32px);
+  margin-left: calc(16px + var(--sidebar-w) + 16px);
+  margin-right: 16px;
 }
 @media (max-width: 1100px){
   .content--wide{
     width: 100%;
     max-width: 100%;
+    margin-left: 0;
+    margin-right: 0;
   }
 }
 
