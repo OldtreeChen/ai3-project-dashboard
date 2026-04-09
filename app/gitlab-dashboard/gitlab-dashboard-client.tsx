@@ -89,7 +89,7 @@ function fmtDate(dateStr: string | null): string {
 type SortKey = 'name' | 'group' | 'last_commit' | 'author' | 'days';
 
 const FETCH_LIMIT_OPTIONS = [50, 100, 200, 500];
-const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
+const PAGE_SIZE_OPTIONS = [25, 50];
 
 function hasChinese(str: string): boolean {
   return /[\u4e00-\u9fff\u3400-\u4dbf]/.test(str);
