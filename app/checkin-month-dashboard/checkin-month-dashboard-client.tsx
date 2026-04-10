@@ -84,8 +84,7 @@ function isPast(dateStr: string) {
 }
 
 export default function CheckinMonthDashboardClient() {
-  const [departments, setDepartments] = useState<Department[]>([]);
-  const [departmentId, setDepartmentId] = useState<string>('');
+  const [deptLabel, setDeptLabel] = useState<string>('');
   const [month, setMonth] = useState<string>(toMonthValue());
 
   const [loading, setLoading] = useState(false);
@@ -112,21 +111,16 @@ export default function CheckinMonthDashboardClient() {
   }, [people, pastWorkdays]);
 
   useEffect(() => {
-    (async () => {
-      try {
-        const ds = await apiGet<Department[]>('/api/departments');
-        setDepartments(ds);
-      } catch (e: any) {
-        setError(e?.message || '載入部門失敗');
-      }
-    })();
+    apiGet<Department[]>('/api/departments')
+      .then((ds) => setDeptLabel(ds.map((d) => d.name).join('、')))
+      .catch(() => {});
   }, []);
 
   const loadData = async () => {
     setLoading(true);
     setError('');
     try {
-      const q = buildQuery({ month, departmentId });
+      const q = buildQuery({ month });
       const data = await apiGet<SummaryResponse>(`/api/checkin-month/summary${q}`);
       setAllDays(data.allDays || data.workdays || []);
       setWorkdaySet(new Set(data.workdays || []));
@@ -142,13 +136,13 @@ export default function CheckinMonthDashboardClient() {
   useEffect(() => {
     void loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [departmentId, month]);
+  }, [month]);
 
   return (
     <div className="app">
       <header className="topbar">
         <div className="brand">
-          <div className="brand__title">月度出勤打卡追蹤</div>
+          <div className="brand__title">{deptLabel ? `${deptLabel}　月度出勤打卡追蹤` : '月度出勤打卡追蹤'}</div>
           <div className="brand__sub">追蹤每人每日打卡紀錄、上下班時間與遲到狀況（以上班日為基準）</div>
           <TopMenu />
         </div>
@@ -156,17 +150,6 @@ export default function CheckinMonthDashboardClient() {
 
       <main className="content content--wide">
         <div className="filters filters--center" style={{ marginBottom: 12 }}>
-          <label className="field">
-            <span className="field__label">部門</span>
-            <select className="field__control" value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}>
-              <option value="">全部</option>
-              {departments.map((d) => (
-                <option key={String(d.id)} value={String(d.id)}>
-                  {d.name}
-                </option>
-              ))}
-            </select>
-          </label>
           <label className="field">
             <span className="field__label">月份</span>
             <input className="field__control" type="month" value={month} onChange={(e) => setMonth(e.target.value)} />
