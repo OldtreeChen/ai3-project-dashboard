@@ -19,7 +19,8 @@ function fmtDatetime(v: any): string | null {
   return null;
 }
 
-const FINISHED_STATUSES = ['Finished', 'Discard'];
+// Only show 審核中 (Auditing) and 執行中 (Execute)
+const ALLOWED_STATUSES = ['Auditing', 'Execute'];
 
 export async function GET(req: Request) {
   try {
@@ -48,8 +49,8 @@ export async function GET(req: Request) {
       deptArgs.push(...deptIds);
     }
 
-    const finishedList = FINISHED_STATUSES.map((s) => `'${s}'`).join(', ');
-    const activeWhere = ` AND sr.FStatus NOT IN (${finishedList}) AND sr.FPlanEndDate IS NOT NULL`;
+    const allowedList = ALLOWED_STATUSES.map((s) => `'${s}'`).join(', ');
+    const activeWhere = ` AND sr.FStatus IN (${allowedList}) AND sr.FPlanEndDate IS NOT NULL`;
 
     // Overdue: FPlanEndDate < NOW()
     const overdueWhere = `${deptWhere}${activeWhere} AND sr.FPlanEndDate < NOW()`;
