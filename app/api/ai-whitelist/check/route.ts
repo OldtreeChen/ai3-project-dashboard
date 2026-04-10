@@ -52,7 +52,7 @@ export async function GET(req: Request) {
 
     sql += ` ORDER BY name ASC`;
 
-    const rows = await prisma.$queryRawUnsafe<any[]>(sql, ...args);
+    const rows = await (prisma.$queryRawUnsafe as any)(sql, ...args) as any[];
     const members = rows.map((r) => ({
       name: String(r.name ?? '').trim(),
       id: String(r.id ?? ''),
