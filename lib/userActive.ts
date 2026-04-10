@@ -40,31 +40,33 @@ function norm(s: string) {
   return String(s || '').toLowerCase();
 }
 
-async function listColumns(tableName: string): Promise<string[]> {
-  const rows = await prisma.$queryRawUnsafe<Array<{ column_name: string }>>(
+type ColumnInfo = { column_name: string; data_type: string };
+
+async function listColumns(tableName: string): Promise<ColumnInfo[]> {
+  const rows = await prisma.$queryRawUnsafe<ColumnInfo[]>(
     `
-      SELECT c.column_name
+      SELECT c.column_name, c.data_type
       FROM information_schema.columns c
       WHERE c.table_schema = DATABASE()
         AND c.table_name = ?
     `,
     tableName
   );
-  return rows.map((r) => r.column_name);
+  return rows;
 }
 
 export async function getUserActiveFilter(tableName: string, alias: string) {
   // Returns best-effort SQL snippet + args to filter out disabled/deleted users.
   // If no suitable column exists, returns empty filter.
   const cols = await listColumns(tableName);
-  const set = new Map(cols.map((c) => [norm(c), c]));
+  const set = new Map(cols.map((c) => [norm(c.column_name), c]));
 
   // try exact match first
-  let picked: { column: string; kind: Candidate['kind'] } | null = null;
+  let picked: { column: string; dataType: string; kind: Candidate['kind'] } | null = null;
   for (const cand of CANDIDATES) {
     const hit = set.get(norm(cand.key));
     if (hit) {
-      picked = { column: hit, kind: cand.kind };
+      picked = { column: hit.column_name, dataType: hit.data_type, kind: cand.kind };
       break;
     }
   }
@@ -72,9 +74,9 @@ export async function getUserActiveFilter(tableName: string, alias: string) {
   // then substring match
   if (!picked) {
     for (const cand of CANDIDATES) {
-      const hit = cols.find((c) => norm(c).includes(norm(cand.key)));
+      const hit = cols.find((c) => norm(c.column_name).includes(norm(cand.key)));
       if (hit) {
-        picked = { column: hit, kind: cand.kind };
+        picked = { column: hit.column_name, dataType: hit.data_type, kind: cand.kind };
         break;
       }
     }
@@ -83,20 +85,26 @@ export async function getUserActiveFilter(tableName: string, alias: string) {
   if (!picked) return { where: '', args: [] as any[], column: null as string | null };
 
   const col = `${alias}.${sqlId(picked.column)}`;
+  // bit(1) columns in MariaDB/MySQL have a quirk: string comparisons like
+  // bit = 'Y' evaluate as bit = 0 (non-numeric string → 0), which falsely
+  // matches disabled users (b'0'). Use integer-only comparison for bit columns.
+  const isBit = picked.dataType.toLowerCase().startsWith('bit');
 
   // Strict mode: only show explicitly enabled users (NULL = not active)
   if (picked.kind === 'enabled') {
+    const inList = isBit ? `1` : `1,'1','Y','y','true','TRUE','T'`;
     return {
       column: picked.column,
-      where: ` AND ${col} IN (1,'1','Y','y','true','TRUE','T')`,
+      where: ` AND ${col} IN (${inList})`,
       args: [] as any[]
     };
   }
 
   // disabled/deleted columns: must be explicitly 0/false/N to be considered active
+  const notInList = isBit ? `1` : `1,'1','Y','y','true','TRUE','T'`;
   return {
     column: picked.column,
-    where: ` AND (${col} IS NULL OR ${col} IN (0,'0','N','n','false','FALSE','F'))`,
+    where: ` AND (${col} IS NULL OR ${col} NOT IN (${notInList}))`,
     args: [] as any[]
   };
 }
