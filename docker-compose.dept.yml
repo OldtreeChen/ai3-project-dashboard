@@ -1,18 +1,18 @@
 services:
-  hours-dashboard-dept:
+  hours-dashboard-tech:
     build: .
-    container_name: hours-dashboard-dept
+    container_name: hours-dashboard-tech
     network_mode: host
     environment:
       - NODE_ENV=production
-      - PORT=5180
+      - PORT=5181
       - DATABASE_URL=${DATABASE_URL}
       - GITLAB_URL=${GITLAB_URL}
       - GITLAB_TOKEN=${GITLAB_TOKEN}
-      - ALLOWED_DEPTS=AI技術服務部,AI雲端服務部
+      - ALLOWED_DEPTS=AI技術服務部
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:5180/api/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:5181/api/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
       interval: 30s
       timeout: 5s
       retries: 5
