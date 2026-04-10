@@ -19,7 +19,19 @@ function fmtDatetime(v: any): string | null {
   return null;
 }
 
-const FINISHED_STATUSES = ['Finished', 'Discard'];
+// Only show these statuses (審核中, 執行中)
+const ALLOWED_STATUSES = ['Auditing', 'Execute'];
+
+// Exclude system/shared accounts by display name or account
+const EXCLUDED_USER_NAMES = [
+  '系統檢查授權用帳號',
+  'AI大夜共用-GIOC',
+  'AI小夜共用-GIOC',
+  'AI呂佳珍-gioc',
+  'AI林佳蓉-GIOC',
+  'cs_api',
+  'qbiai_user',
+];
 
 export async function GET(req: Request) {
   try {
@@ -34,6 +46,7 @@ export async function GET(req: Request) {
     const U = sqlId(m.tables.user);
     const uId = sqlId(m.user.id);
     const uName = sqlId(m.user.displayName);
+    const uAccount = m.user.account ? sqlId(m.user.account) : null;
 
     const SR = '`TcServiceRequest`';
     const D = '`TsDepartment`';
@@ -48,14 +61,20 @@ export async function GET(req: Request) {
       deptArgs.push(...deptIds);
     }
 
-    const finishedList = FINISHED_STATUSES.map((s) => `'${s}'`).join(', ');
-    const activeWhere = ` AND sr.FStatus NOT IN (${finishedList}) AND sr.FPlanEndDate IS NOT NULL`;
+    // Only show Auditing and Execute statuses
+    const allowedList = ALLOWED_STATUSES.map((s) => `'${s}'`).join(', ');
+    const activeWhere = ` AND sr.FStatus IN (${allowedList}) AND sr.FPlanEndDate IS NOT NULL`;
+
+    // Exclude system/shared accounts by name and account
+    const excList = EXCLUDED_USER_NAMES.map((n) => `'${n.replace(/'/g, "''")}'`).join(', ');
+    const userExclWhere = ` AND (u.${uName} NOT IN (${excList}) OR u.${uName} IS NULL)` +
+      (uAccount ? ` AND (u.${uAccount} NOT IN (${excList}) OR u.${uAccount} IS NULL)` : '');
 
     // Overdue: FPlanEndDate < NOW()
-    const overdueWhere = `${deptWhere}${activeWhere} AND sr.FPlanEndDate < NOW()`;
+    const overdueWhere = `${deptWhere}${activeWhere}${userExclWhere} AND sr.FPlanEndDate < NOW()`;
 
     // Upcoming 7 days: NOW() <= FPlanEndDate < DATE_ADD(NOW(), INTERVAL 7 DAY)
-    const upcomingWhere = `${deptWhere}${activeWhere} AND sr.FPlanEndDate >= NOW() AND sr.FPlanEndDate < DATE_ADD(NOW(), INTERVAL 7 DAY)`;
+    const upcomingWhere = `${deptWhere}${activeWhere}${userExclWhere} AND sr.FPlanEndDate >= NOW() AND sr.FPlanEndDate < DATE_ADD(NOW(), INTERVAL 7 DAY)`;
 
     const selectCols = `
       sr.FId AS id,
