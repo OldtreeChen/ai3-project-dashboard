@@ -34,16 +34,14 @@ export async function GET(req: Request) {
       return Response.json(rows);
     }
 
-    // Build WHERE clause from ALLOWED_DEPTS
+    // Build WHERE clause from ALLOWED_DEPTS — exact match only
     const inList = ALLOWED_DEPTS.map((d) => `'${d.replace(/'/g, "''")}'`).join(', ');
-    const likeList = ALLOWED_DEPTS.map((d) => `d.${dName} LIKE '%${d.replace(/'/g, "''")}%'`).join(' OR ');
     const sql = `
       SELECT DISTINCT
         d.${dId} AS id,
         d.${dName} AS name
       FROM ${D} d
       WHERE d.${dName} IN (${inList})
-         OR ${likeList}
       ORDER BY d.${dName} ASC
     `;
     const rows = await prisma.$queryRawUnsafe<any[]>(sql);
