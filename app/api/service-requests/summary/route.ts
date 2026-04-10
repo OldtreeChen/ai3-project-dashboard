@@ -19,8 +19,8 @@ function fmtDatetime(v: any): string | null {
   return null;
 }
 
-// Only show these statuses (審核中, 執行中)
-const ALLOWED_STATUSES = ['Auditing', 'Execute'];
+// Only show 審核中 (Auditing)、執行中 (Execute)、逾時執行中 (Overdue)
+const ALLOWED_STATUSES = ['Auditing', 'Execute', 'Overdue'];
 
 // Exclude system/shared accounts by display name or account
 const EXCLUDED_USER_NAMES = [
