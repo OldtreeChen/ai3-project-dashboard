@@ -108,11 +108,16 @@ export default function ServiceRequestDashboardClient() {
   const totalPages = data ? Math.ceil(data.overdueTotal / PAGE_SIZE) : 1;
 
   return (
-    <div className="dashboard">
-      <TopMenu />
-      <div className="dashboard__body">
-        <h1 className="dashboard__title">服務請求儀表板</h1>
+    <div className="app">
+      <header className="topbar">
+        <div className="brand">
+          <div className="brand__title">服務請求追蹤</div>
+          <div className="brand__sub">依預計完成時間篩選：已逾期 / 近 7 天到期（審核中、執行中）</div>
+          <TopMenu />
+        </div>
+      </header>
 
+      <main className="content">
         {/* Section 1: Overdue */}
         <section className="sr-section">
           <div className="sr-section__header">
@@ -258,7 +263,7 @@ export default function ServiceRequestDashboardClient() {
             </>
           )}
         </section>
-      </div>
+      </main>
     </div>
   );
 }
