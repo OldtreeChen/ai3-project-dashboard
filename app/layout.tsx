@@ -1,7 +1,7 @@
 import './globals.css';
 
 export const metadata = {
-  title: '服務群工時儀表板',
+  title: 'AI雲端服務部工時儀表板',
   description: '部門/人員任務工時追蹤'
 };
 
