@@ -28,7 +28,7 @@ const STATUS_LABEL: Record<string, string> = {
   Send: '已送出',
   Auditing: '審核中',
   Execute: '執行中',
-  Overdue: '逾期',
+  Overdue: '逾時執行中',
   OverdueUpgrade: '逾期升級',
   AutoUpgrade: '自動升級',
   Back: '退回',

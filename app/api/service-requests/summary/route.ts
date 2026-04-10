@@ -20,7 +20,7 @@ function fmtDatetime(v: any): string | null {
 }
 
 // Only show 審核中 (Auditing) and 執行中 (Execute)
-const ALLOWED_STATUSES = ['Auditing', 'Execute'];
+const ALLOWED_STATUSES = ['Auditing', 'Execute', 'Overdue'];
 
 export async function GET(req: Request) {
   try {
