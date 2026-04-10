@@ -79,17 +79,21 @@ export async function getAiDeptIds(): Promise<{ dept1Id: string | null; dept2Id:
   const dId = sqlId(m.department.id);
   const dName = sqlId(m.department.name);
 
+  // Use ALLOWED_DEPTS env var if set (e.g. dept-tech-cloud deployment),
+  // otherwise fall back to the default AI專案一部 / AI專案二部.
+  const allowedDepts: string[] = process.env.ALLOWED_DEPTS
+    ? process.env.ALLOWED_DEPTS.split(',').map((d) => d.trim()).filter(Boolean)
+    : ['AI專案一部', 'AI專案二部'];
+
+  const inList = allowedDepts.map((d) => `'${d.replace(/'/g, "''")}'`).join(', ');
   const rows = await prisma.$queryRawUnsafe<Array<{ id: string; name: string }>>(
-    `
-      SELECT d.${dId} AS id, d.${dName} AS name
-      FROM ${D} d
-      WHERE d.${dName} LIKE '%AI專案一部%'
-         OR d.${dName} LIKE '%AI專案二部%'
-    `
+    `SELECT d.${dId} AS id, d.${dName} AS name FROM ${D} d WHERE d.${dName} IN (${inList})`
   );
 
-  const dept1 = rows.find((r) => String(r.name || '').includes('AI專案一部'))?.id || null;
-  const dept2 = rows.find((r) => String(r.name || '').includes('AI專案二部'))?.id || null;
+  const dept1 = rows.find((r) => String(r.name || '') === allowedDepts[0])?.id || null;
+  const dept2 = allowedDepts[1]
+    ? (rows.find((r) => String(r.name || '') === allowedDepts[1])?.id || null)
+    : null;
   globalCache.__aiDeptIds = { dept1Id: dept1, dept2Id: dept2 };
   return globalCache.__aiDeptIds;
 }
