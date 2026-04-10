@@ -1,7 +1,7 @@
-import DashboardClient from './DashboardClient';
+import { redirect } from 'next/navigation';
 
 export default function Page() {
-  return <DashboardClient />;
+  redirect('/dept-person-month-dashboard');
 }
 
 
