@@ -86,9 +86,8 @@ async function apiGet<T>(path: string): Promise<T> {
 }
 
 export default function DeptPersonMonthDashboardClient() {
-  const [departments, setDepartments] = useState<Department[]>([]);
+  const [deptLabel, setDeptLabel] = useState<string>('');
 
-  const [departmentId, setDepartmentId] = useState<string>('');
   const [month, setMonth] = useState<string>(toMonthValue());
 
   const [loading, setLoading] = useState(false);
@@ -138,22 +137,16 @@ export default function DeptPersonMonthDashboardClient() {
   };
 
   useEffect(() => {
-    (async () => {
-      try {
-        setError('');
-        const ds = await apiGet<Department[]>('/api/departments');
-        setDepartments(ds);
-      } catch (e: any) {
-        setError(e?.message || '載入部門失敗');
-      }
-    })();
+    apiGet<Department[]>('/api/departments')
+      .then((ds) => setDeptLabel(ds.map((d) => d.name).join('、')))
+      .catch(() => {});
   }, []);
 
   const loadSummary = async () => {
     setLoading(true);
     setError('');
     try {
-      const q = buildQuery({ month, departmentId });
+      const q = buildQuery({ month });
       const data = await apiGet<{ people: SummaryRow[]; workday_count?: number }>(`/api/dept-person-month/summary${q}`);
       setRows(data.people || []);
       setWorkdayCount(data.workday_count || getWorkdaysInMonth(month));
@@ -167,11 +160,10 @@ export default function DeptPersonMonthDashboardClient() {
     }
   };
 
-  // Selecting department/month should be enough; auto query without needing to pick a person
   useEffect(() => {
     void loadSummary();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [departmentId, month]);
+  }, [month]);
 
   const toggleDetails = async (pid: string) => {
     const next = String(pid);
@@ -209,7 +201,7 @@ export default function DeptPersonMonthDashboardClient() {
     <div className="app">
       <header className="topbar">
         <div className="brand">
-          <div className="brand__title">部門 / 人員 任務統計（月）</div>
+          <div className="brand__title">{deptLabel ? `${deptLabel}　部門 / 人員 任務統計（月）` : '部門 / 人員 任務統計（月）'}</div>
           <div className="brand__sub">依「接收任務月份」篩選，統計每人：接收總時數 / 已執行 / 剩餘</div>
           <TopMenu />
         </div>
@@ -217,18 +209,6 @@ export default function DeptPersonMonthDashboardClient() {
 
       <main className="content">
         <div className="filters filters--center" style={{ marginBottom: 12 }}>
-          <label className="field">
-            <span className="field__label">部門</span>
-            <select className="field__control" value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}>
-              <option value="">全部</option>
-              {departments.map((d) => (
-                <option key={String(d.id)} value={String(d.id)}>
-                  {d.name}
-                </option>
-              ))}
-            </select>
-          </label>
-
           <label className="field">
             <span className="field__label">月份</span>
             <input className="field__control" type="month" value={month} onChange={(e) => setMonth(e.target.value)} />
