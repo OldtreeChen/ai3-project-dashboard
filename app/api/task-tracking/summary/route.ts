@@ -98,10 +98,12 @@ export async function GET(req: Request) {
       : ` AND t.${tPlanEnd} IS NOT NULL`;
 
     // Exclude system accounts
-    const excList = EXCLUDED_USER_NAMES.map((n) => `'${n.replace(/'/g, "''")}'`).join(', ');
-    const userExclWhere =
-      ` AND (u.${uName} NOT IN (${excList}) OR u.${uName} IS NULL)` +
-      (uAccount ? ` AND (u.${uAccount} NOT IN (${excList}) OR u.${uAccount} IS NULL)` : '');
+    // Use LIKE so names with job-title suffixes are also excluded
+    const nameLikeClauses = EXCLUDED_USER_NAMES.map(
+      (n) => `u.${uName} NOT LIKE '${n.replace(/'/g, "''")}%'`
+    ).join(' AND ');
+    const userExclWhere = ` AND (${nameLikeClauses} OR u.${uName} IS NULL)` +
+      (uAccount ? ` AND (u.${uAccount} NOT IN (${EXCLUDED_USER_NAMES.map((n) => `'${n.replace(/'/g, "''")}'`).join(', ')}) OR u.${uAccount} IS NULL)` : '');
 
     const selectCols = `
       t.${tId} AS id,

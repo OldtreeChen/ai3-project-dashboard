@@ -74,9 +74,12 @@ export async function GET(req: Request) {
     const activeWhere = ` AND sr.FStatus IN (${allowedList}) AND sr.FPlanEndDate IS NOT NULL`;
 
     // Exclude system/shared accounts by name and account
-    const excList = EXCLUDED_USER_NAMES.map((n) => `'${n.replace(/'/g, "''")}'`).join(', ');
-    const userExclWhere = ` AND (u.${uName} NOT IN (${excList}) OR u.${uName} IS NULL)` +
-      (uAccount ? ` AND (u.${uAccount} NOT IN (${excList}) OR u.${uAccount} IS NULL)` : '');
+    // Use LIKE matching so names with job-title suffixes (e.g. "AI林佳蓉-GIOC (工程師)") are also excluded
+    const nameLikeClauses = EXCLUDED_USER_NAMES.map(
+      (n) => `u.${uName} NOT LIKE '${n.replace(/'/g, "''")}%'`
+    ).join(' AND ');
+    const userExclWhere = ` AND (${nameLikeClauses} OR u.${uName} IS NULL)` +
+      (uAccount ? ` AND (u.${uAccount} NOT IN (${EXCLUDED_USER_NAMES.map((n) => `'${n.replace(/'/g, "''")}'`).join(', ')}) OR u.${uAccount} IS NULL)` : '');
 
     // Overdue: FPlanEndDate < NOW()
     const overdueWhere = `${deptWhere}${activeWhere}${userExclWhere} AND sr.FPlanEndDate < NOW()`;
