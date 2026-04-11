@@ -9,6 +9,7 @@ const LINKS: LinkItem[] = [
   { href: '/attendance-month-dashboard', label: '月度工時填報追蹤' },
   { href: '/checkin-month-dashboard', label: '月度出勤打卡追蹤' },
   { href: '/service-request-dashboard', label: '服務請求追蹤' },
+  { href: '/task-tracking-dashboard', label: '任務追蹤' },
 ];
 
 export default function TopMenu() {
