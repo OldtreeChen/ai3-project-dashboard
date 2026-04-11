@@ -25,6 +25,7 @@ const EXCLUDED_USER_NAMES = [
   'AI林佳蓉-GIOC',
   'cs_api',
   'qbiai_user',
+  '李一新',
 ];
 
 function fmtDatetime(v: any): string | null {
@@ -81,7 +82,7 @@ export async function GET(req: Request) {
       return Response.json({ error: 'Missing task assignee or user.departmentId mapping' }, { status: 500 });
     }
 
-    // Filter by 雲端服務部 members (via user's department)
+    // Filter by dept members (via user's department)
     const deptIds = [dept1Id, dept2Id].filter(Boolean) as string[];
     let deptWhere = '';
     const deptArgs: string[] = [];
@@ -97,7 +98,6 @@ export async function GET(req: Request) {
       ? ` AND t.${tStatus} IN (${allowedList}) AND t.${tPlanEnd} IS NOT NULL`
       : ` AND t.${tPlanEnd} IS NOT NULL`;
 
-    // Exclude system accounts
     // Use LIKE so names with job-title suffixes are also excluded
     const nameLikeClauses = EXCLUDED_USER_NAMES.map(
       (n) => `u.${uName} NOT LIKE '${n.replace(/'/g, "''")}%'`
@@ -123,8 +123,9 @@ export async function GET(req: Request) {
 
     const overdueWhere = `${deptWhere}${activeWhere}${userExclWhere} AND t.${tPlanEnd} < NOW()`;
     const upcomingWhere = `${deptWhere}${activeWhere}${userExclWhere} AND t.${tPlanEnd} >= NOW() AND t.${tPlanEnd} < DATE_ADD(NOW(), INTERVAL 7 DAY)`;
+    const allActiveWhere = `${deptWhere}${activeWhere}${userExclWhere}`;
 
-    const [overdueCountRows, upcomingCountRows] = await Promise.all([
+    const [overdueCountRows, upcomingCountRows, personStatsRows] = await Promise.all([
       (prisma.$queryRawUnsafe as any)(
         `SELECT COUNT(1) AS cnt ${joinClause} WHERE 1=1 ${overdueWhere}`,
         ...deptArgs
@@ -133,6 +134,15 @@ export async function GET(req: Request) {
         `SELECT COUNT(1) AS cnt ${joinClause} WHERE 1=1 ${upcomingWhere}`,
         ...deptArgs
       ) as Promise<Array<{ cnt: bigint }>>,
+      tStatus
+        ? (prisma.$queryRawUnsafe as any)(
+            `SELECT u.${uName} AS userName, t.${tStatus} AS status, COUNT(1) AS cnt
+             ${joinClause} WHERE 1=1 ${allActiveWhere}
+             GROUP BY u.${uName}, t.${tStatus}
+             ORDER BY u.${uName} ASC`,
+            ...deptArgs
+          ) as Promise<Array<{ userName: string | null; status: string | null; cnt: bigint }>>
+        : Promise.resolve([] as Array<{ userName: string | null; status: string | null; cnt: bigint }>),
     ]);
 
     const overdueTotal = Number(overdueCountRows[0]?.cnt ?? 0);
@@ -160,6 +170,12 @@ export async function GET(req: Request) {
         projectName: r.projectName ? String(r.projectName) : null,
       }));
 
+    const personStats = personStatsRows.map((r) => ({
+      userName: r.userName ? String(r.userName) : '(未知)',
+      status: String(r.status ?? ''),
+      cnt: Number(r.cnt ?? 0),
+    }));
+
     return Response.json({
       overdue: fmt(overdueRows),
       overdueTotal,
@@ -167,6 +183,7 @@ export async function GET(req: Request) {
       overduePageSize: pageSize,
       upcoming: fmt(upcomingRows),
       upcomingTotal,
+      personStats,
     });
   } catch (e: any) {
     console.error('[task-tracking/summary]', e);

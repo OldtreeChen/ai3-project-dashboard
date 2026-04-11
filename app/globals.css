@@ -970,6 +970,51 @@ body{
   padding: 12px 0;
 }
 
+/* ── Person Stats Table (service-request & task-tracking dashboards) ── */
+.sr-section--ps{ margin-bottom: 24px; }
+.ps-scroll{ overflow-x: auto; }
+.ps-table{
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  min-width: 560px;
+}
+.ps-table th{
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+  font-weight: 600;
+  white-space: nowrap;
+  text-align: center;
+}
+.ps-table td{
+  padding: 7px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  text-align: center;
+  white-space: nowrap;
+}
+.ps-table tr:last-child td{ border-bottom: none; }
+.ps-table tr:hover td{ background: rgba(255,255,255,0.03); }
+.ps-col--name{
+  text-align: left !important;
+  font-weight: 600;
+  min-width: 90px;
+}
+.ps-col--status{ min-width: 72px; }
+.ps-col--alert{
+  color: var(--bad);
+}
+.ps-col--total{
+  font-weight: 700;
+  min-width: 52px;
+  color: var(--primary);
+}
+.ps-val--alert{
+  color: var(--bad);
+  font-weight: 700;
+}
+.ps-zero{ color: rgba(255,255,255,0.2); }
+
 @media (max-width: 980px){
   .cards{ grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .grid{ grid-template-columns: 1fr; }
