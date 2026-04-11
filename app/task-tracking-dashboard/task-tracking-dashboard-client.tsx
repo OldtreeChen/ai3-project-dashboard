@@ -226,6 +226,20 @@ export default function TaskTrackingDashboardClient() {
                     </tr>
                   ))}
                 </tbody>
+                <tfoot>
+                  <tr className="ps-row--total">
+                    <td className="ps-col--name">合計</td>
+                    {STAT_STATUSES.map((s) => {
+                      const v = personPivot.reduce((sum, r) => sum + (r.counts[s] ?? 0), 0);
+                      return (
+                        <td key={s} className={`ps-col--status${OVERDUE_STATUSES.has(s) && v > 0 ? ' ps-val--alert' : ''}`}>
+                          {v > 0 ? v : <span className="ps-zero">-</span>}
+                        </td>
+                      );
+                    })}
+                    <td className="ps-col--total">{personPivot.reduce((sum, r) => sum + r.total, 0)}</td>
+                  </tr>
+                </tfoot>
               </table>
             </div>
           </section>
