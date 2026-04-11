@@ -6,7 +6,7 @@ import { getTaskPlannedEndAtColumn } from '@/lib/taskPlannedEndAt';
 export const dynamic = 'force-dynamic';
 
 // Statuses that mean the task is done — exclude these
-const DONE_STATUSES = ['Finished', 'Discard', 'Close', 'Closed', 'Cancel', 'Cancelled'];
+const DONE_STATUSES = ['Finished', 'Discard', 'Discarded', 'Close', 'Closed', 'Cancel', 'Cancelled', 'FinishAuditing'];
 
 // Exclude system/shared accounts (same as service-requests on cloud)
 const EXCLUDED_USER_NAMES = [
