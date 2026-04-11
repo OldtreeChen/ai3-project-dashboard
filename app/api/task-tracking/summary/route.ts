@@ -1,8 +1,31 @@
 import { prisma } from '@/lib/prisma';
 import { getEcpMapping, sqlId } from '@/lib/ecpSchema';
 import { getAiDeptIds } from '@/lib/aiPeopleWhitelist';
+import { getTaskPlannedEndAtColumn } from '@/lib/taskPlannedEndAt';
 
 export const dynamic = 'force-dynamic';
+
+// 執行中、審核中、自動升級中、延時申請中、逾時執行中、逾時自動升級中、返回修改中
+const ALLOWED_STATUSES = [
+  'Executing',      // 執行中
+  'Auditing',       // 審核中
+  'AutoUpgrade',    // 自動升級中
+  'Prolong',        // 延時申請中
+  'Overdue',        // 逾時執行中
+  'OverdueUpgrade', // 逾時自動升級中
+  'Back',           // 返回修改中
+];
+
+// Exclude system/shared accounts
+const EXCLUDED_USER_NAMES = [
+  '系統檢查授權用帳號',
+  'AI大夜共用-GIOC',
+  'AI小夜共用-GIOC',
+  'AI呂佳珍-gioc',
+  'AI林佳蓉-GIOC',
+  'cs_api',
+  'qbiai_user',
+];
 
 function fmtDatetime(v: any): string | null {
   if (!v) return null;
@@ -19,28 +42,6 @@ function fmtDatetime(v: any): string | null {
   return null;
 }
 
-// 執行中、審核中、自動升級中、延時申請中、逾時執行中、逾時自動升級中、返回修改中
-const ALLOWED_STATUSES = [
-  'Execute',        // 執行中
-  'Auditing',       // 審核中
-  'AutoUpgrade',    // 自動升級中
-  'Delay',          // 延時申請中
-  'Overdue',        // 逾時執行中
-  'OverdueUpgrade', // 逾時自動升級中
-  'Back',           // 返回修改中
-];
-
-// Exclude system/shared accounts by display name or account
-const EXCLUDED_USER_NAMES = [
-  '系統檢查授權用帳號',
-  'AI大夜共用-GIOC',
-  'AI小夜共用-GIOC',
-  'AI呂佳珍-gioc',
-  'AI林佳蓉-GIOC',
-  'cs_api',
-  'qbiai_user',
-];
-
 export async function GET(req: Request) {
   try {
     const url = new URL(req.url);
@@ -50,29 +51,53 @@ export async function GET(req: Request) {
 
     const m = await getEcpMapping();
     const { dept1Id, dept2Id } = await getAiDeptIds();
+    const plannedEndCol = await getTaskPlannedEndAtColumn();
 
+    const T = sqlId(m.tables.task);
+    const P = sqlId(m.tables.project);
     const U = sqlId(m.tables.user);
+
+    const tId = sqlId(m.task.id);
+    const tName = sqlId(m.task.name);
+    const tProjectId = sqlId(m.task.projectId);
+    const tStatus = m.task.status ? sqlId(m.task.status) : null;
+    const tPlanEnd = sqlId(plannedEndCol || (m.task.plannedEndAt ?? 'FPredictEndDate'));
+    const tAssignee = m.task.executorUserId
+      ? sqlId(m.task.executorUserId)
+      : m.task.ownerUserId
+        ? sqlId(m.task.ownerUserId)
+        : null;
+
+    const pId = sqlId(m.project.id);
+    const pName = sqlId(m.project.name);
+    const pCode = m.project.code ? sqlId(m.project.code) : null;
+
     const uId = sqlId(m.user.id);
     const uName = sqlId(m.user.displayName);
     const uAccount = m.user.account ? sqlId(m.user.account) : null;
+    const uDeptId = m.user.departmentId ? sqlId(m.user.departmentId) : null;
 
-    const SR = '`TcServiceRequest`';
-    const D = '`TsDepartment`';
+    if (!tAssignee || !uDeptId) {
+      return Response.json({ error: 'Missing task assignee or user.departmentId mapping' }, { status: 500 });
+    }
 
-    // Department filter
+    // Filter by 雲端服務部 members (via user's department)
     const deptIds = [dept1Id, dept2Id].filter(Boolean) as string[];
     let deptWhere = '';
     const deptArgs: string[] = [];
     if (deptIds.length > 0) {
       const placeholders = deptIds.map(() => '?').join(', ');
-      deptWhere = ` AND sr.FDepartmentId IN (${placeholders})`;
+      deptWhere = ` AND u.${uDeptId} IN (${placeholders})`;
       deptArgs.push(...deptIds);
     }
 
     // Status inclusion filter
     const allowedList = ALLOWED_STATUSES.map((s) => `'${s}'`).join(', ');
-    const activeWhere = ` AND sr.FStatus IN (${allowedList}) AND sr.FPlanEndDate IS NOT NULL`;
+    const activeWhere = tStatus
+      ? ` AND t.${tStatus} IN (${allowedList}) AND t.${tPlanEnd} IS NOT NULL`
+      : ` AND t.${tPlanEnd} IS NOT NULL`;
 
+    // Exclude system accounts
     // Use LIKE so names with job-title suffixes are also excluded
     const nameLikeClauses = EXCLUDED_USER_NAMES.map(
       (n) => `u.${uName} NOT LIKE '${n.replace(/'/g, "''")}%'`
@@ -80,28 +105,24 @@ export async function GET(req: Request) {
     const userExclWhere = ` AND (${nameLikeClauses} OR u.${uName} IS NULL)` +
       (uAccount ? ` AND (u.${uAccount} NOT IN (${EXCLUDED_USER_NAMES.map((n) => `'${n.replace(/'/g, "''")}'`).join(', ')}) OR u.${uAccount} IS NULL)` : '');
 
-    // Overdue: FPlanEndDate < NOW()
-    const overdueWhere = `${deptWhere}${activeWhere}${userExclWhere} AND sr.FPlanEndDate < NOW()`;
-
-    // Upcoming 7 days
-    const upcomingWhere = `${deptWhere}${activeWhere}${userExclWhere} AND sr.FPlanEndDate >= NOW() AND sr.FPlanEndDate < DATE_ADD(NOW(), INTERVAL 7 DAY)`;
-
     const selectCols = `
-      sr.FId AS id,
-      sr.FName AS name,
-      sr.FStatus AS status,
-      sr.FPlanEndDate AS planEndDate,
-      sr.FPriority AS priority,
-      sr.FCreateTime AS createTime,
+      t.${tId} AS id,
+      t.${tName} AS name,
+      ${tStatus ? `t.${tStatus} AS status,` : `NULL AS status,`}
+      t.${tPlanEnd} AS planEndDate,
       u.${uName} AS userName,
-      d.FName AS deptName
+      ${pCode ? `p.${pCode} AS projectCode,` : `NULL AS projectCode,`}
+      p.${pName} AS projectName
     `;
 
     const joinClause = `
-      FROM ${SR} sr
-      LEFT JOIN ${U} u ON u.${uId} = sr.FUserId
-      LEFT JOIN ${D} d ON d.FId = sr.FDepartmentId
+      FROM ${T} t
+      LEFT JOIN ${U} u ON u.${uId} = t.${tAssignee}
+      LEFT JOIN ${P} p ON p.${pId} = t.${tProjectId}
     `;
+
+    const overdueWhere = `${deptWhere}${activeWhere}${userExclWhere} AND t.${tPlanEnd} < NOW()`;
+    const upcomingWhere = `${deptWhere}${activeWhere}${userExclWhere} AND t.${tPlanEnd} >= NOW() AND t.${tPlanEnd} < DATE_ADD(NOW(), INTERVAL 7 DAY)`;
 
     const [overdueCountRows, upcomingCountRows] = await Promise.all([
       (prisma.$queryRawUnsafe as any)(
@@ -119,11 +140,11 @@ export async function GET(req: Request) {
 
     const [overdueRows, upcomingRows] = await Promise.all([
       (prisma.$queryRawUnsafe as any)(
-        `SELECT ${selectCols} ${joinClause} WHERE 1=1 ${overdueWhere} ORDER BY sr.FPlanEndDate ASC LIMIT ? OFFSET ?`,
+        `SELECT ${selectCols} ${joinClause} WHERE 1=1 ${overdueWhere} ORDER BY t.${tPlanEnd} ASC LIMIT ? OFFSET ?`,
         ...deptArgs, pageSize, offset
       ) as Promise<any[]>,
       (prisma.$queryRawUnsafe as any)(
-        `SELECT ${selectCols} ${joinClause} WHERE 1=1 ${upcomingWhere} ORDER BY sr.FPlanEndDate ASC`,
+        `SELECT ${selectCols} ${joinClause} WHERE 1=1 ${upcomingWhere} ORDER BY t.${tPlanEnd} ASC`,
         ...deptArgs
       ) as Promise<any[]>,
     ]);
@@ -132,12 +153,11 @@ export async function GET(req: Request) {
       rows.map((r) => ({
         id: String(r.id ?? ''),
         name: String(r.name ?? ''),
-        status: String(r.status ?? ''),
+        status: r.status ? String(r.status) : null,
         planEndDate: fmtDatetime(r.planEndDate),
-        priority: r.priority != null ? String(r.priority) : null,
-        createTime: fmtDatetime(r.createTime),
         userName: r.userName ? String(r.userName) : null,
-        deptName: r.deptName ? String(r.deptName) : null,
+        projectCode: r.projectCode ? String(r.projectCode) : null,
+        projectName: r.projectName ? String(r.projectName) : null,
       }));
 
     return Response.json({
@@ -149,7 +169,7 @@ export async function GET(req: Request) {
       upcomingTotal,
     });
   } catch (e: any) {
-    console.error('[service-requests/summary]', e);
+    console.error('[task-tracking/summary]', e);
     return Response.json({ error: e?.message ?? 'unknown error' }, { status: 500 });
   }
 }
