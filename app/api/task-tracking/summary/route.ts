@@ -36,6 +36,7 @@ export async function GET(req: Request) {
     const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10));
     const pageSize = Math.min(100, Math.max(1, parseInt(url.searchParams.get('pageSize') || '10', 10)));
     const offset = (page - 1) * pageSize;
+    const deptId = url.searchParams.get('deptId') || null;
 
     const m = await getEcpMapping();
     const { dept1Id, dept2Id } = await getAiDeptIds();
@@ -72,7 +73,7 @@ export async function GET(req: Request) {
       uName,
       uDeptId,
       uAccount: null,
-      departmentId: null,
+      departmentId: deptId,
       dept1Id,
       dept2Id,
     });

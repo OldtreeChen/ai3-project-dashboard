@@ -38,6 +38,8 @@ type SummaryData = {
   personStats: PersonStatRow[];
 };
 
+type Dept = { id: string; name: string };
+
 const PAGE_SIZE = 10;
 
 function taskProjectLabel(r: TaskRow): string | null {
@@ -87,13 +89,16 @@ export default function TaskTrackingDashboardClient() {
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [autoPage, setAutoPage] = useState(false);
-  const [deptLabel, setDeptLabel] = useState('');
+  const [depts, setDepts] = useState<Dept[]>([]);
+  const [selectedDeptId, setSelectedDeptId] = useState<string | null>(null);
 
-  const fetchData = useCallback(async (p: number) => {
+  const fetchData = useCallback(async (p: number, deptId: string | null) => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/task-tracking/summary?page=${p}&pageSize=${PAGE_SIZE}`);
+      const params = new URLSearchParams({ page: String(p), pageSize: String(PAGE_SIZE) });
+      if (deptId) params.set('deptId', deptId);
+      const res = await fetch(`/api/task-tracking/summary?${params}`);
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err?.error || `HTTP ${res.status}`);
@@ -106,12 +111,12 @@ export default function TaskTrackingDashboardClient() {
     }
   }, []);
 
-  useEffect(() => { fetchData(page); }, [fetchData, page]);
+  useEffect(() => { fetchData(page, selectedDeptId); }, [fetchData, page, selectedDeptId]);
 
   useEffect(() => {
     fetch('/api/departments')
       .then((r) => r.json())
-      .then((ds: Array<{ name: string }>) => setDeptLabel(ds.map((d) => d.name).join('、')))
+      .then((ds: Dept[]) => setDepts(ds))
       .catch(() => {});
   }, []);
 
@@ -144,17 +149,48 @@ export default function TaskTrackingDashboardClient() {
 
   const totalPages = data ? Math.ceil(data.overdueTotal / PAGE_SIZE) : 1;
 
+  const selectedDeptName = selectedDeptId
+    ? (depts.find((d) => d.id === selectedDeptId)?.name ?? '')
+    : depts.map((d) => d.name).join('、');
+
+  function selectDept(id: string | null) {
+    setSelectedDeptId(id);
+    setPage(1);
+    setAutoPage(false);
+  }
+
   return (
     <div className="app">
       <header className="topbar">
         <div className="brand">
-          <div className="brand__title">{deptLabel ? `${deptLabel}　任務追蹤` : '任務追蹤'}</div>
+          <div className="brand__title">{selectedDeptName ? `${selectedDeptName}　任務追蹤` : '任務追蹤'}</div>
           <div className="brand__sub">依預計完成時間篩選：已逾期 / 近 7 天到期</div>
           <TopMenu />
         </div>
       </header>
 
       <main className="content content--wide">
+
+        {/* Department selector */}
+        {depts.length > 0 && (
+          <div className="dept-tabs">
+            <button
+              className={`dept-tab${selectedDeptId === null ? ' dept-tab--active' : ''}`}
+              onClick={() => selectDept(null)}
+            >
+              全部
+            </button>
+            {depts.map((d) => (
+              <button
+                key={d.id}
+                className={`dept-tab${selectedDeptId === d.id ? ' dept-tab--active' : ''}`}
+                onClick={() => selectDept(d.id)}
+              >
+                {d.name}
+              </button>
+            ))}
+          </div>
+        )}
 
         {!loading && personPivot.length > 0 && (
           <section className="sr-section sr-section--ps">

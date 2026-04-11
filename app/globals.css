@@ -846,6 +846,31 @@ body{
   color: rgba(251,146,60,0.90);
 }
 
+/* ── Department tab selector ── */
+.dept-tabs{
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+.dept-tab{
+  padding: 6px 18px;
+  border-radius: 99px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.dept-tab:hover{ background: var(--panel2); color: var(--text); }
+.dept-tab--active{
+  background: rgba(96,165,250,0.18);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
 /* ── Task Tracking Dashboard ── */
 .sr-section{
   background: var(--panel);
