@@ -19,13 +19,12 @@ function fmtDatetime(v: any): string | null {
   return null;
 }
 
-// 執行中、審核中、延時執行中、自動升級中、延時申請中、逾時執行中、逾時自動升級中、返回修改中
+// 執行中、審核中、自動升級中、延時申請中、逾時執行中、逾時自動升級中、返回修改中
 const ALLOWED_STATUSES = [
   'Execute',        // 執行中
   'Auditing',       // 審核中
-  'OverdueExecute', // 延時執行中 (tentative value)
   'AutoUpgrade',    // 自動升級中
-  'Send',           // 延時申請中
+  'Delay',          // 延時申請中
   'Overdue',        // 逾時執行中
   'OverdueUpgrade', // 逾時自動升級中
   'Back',           // 返回修改中

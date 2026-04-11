@@ -24,20 +24,21 @@ type SummaryData = {
 };
 
 const STATUS_LABEL: Record<string, string> = {
-  New: '新建',
-  Send: '延時申請中',
-  Auditing: '審核中',
+  New: '未開始',
+  Assigned: '已分配',
+  Finished: '已完成',
+  Delay: '延時申請中',
   Execute: '執行中',
-  Executing: '執行中',
-  OverdueExecute: '延時執行中',
-  AutoUpgrade: '自動升級中',
+  Auditing: '審核中',
+  Send: '未分配',
+  Again: '重分配',
   Overdue: '逾時執行中',
+  AutoUpgrade: '自動升級中',
   OverdueUpgrade: '逾時自動升級中',
   Back: '返回修改中',
-  FinishAuditing: '完成審核',
-  Finished: '已完成',
-  Discard: '作廢',
-  Discarded: '作廢',
+  FinishAuditing: '關閉審核中',
+  OverdueDelay: '逾時延時申請中',
+  Discard: '已作廢',
 };
 
 const PRIORITY_LABEL: Record<string, string> = {
