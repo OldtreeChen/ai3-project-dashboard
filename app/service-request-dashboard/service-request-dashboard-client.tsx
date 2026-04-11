@@ -25,16 +25,19 @@ type SummaryData = {
 
 const STATUS_LABEL: Record<string, string> = {
   New: '新建',
-  Send: '已送出',
+  Send: '延時申請中',
   Auditing: '審核中',
   Execute: '執行中',
+  Executing: '執行中',
+  OverdueExecute: '延時執行中',
+  AutoUpgrade: '自動升級中',
   Overdue: '逾時執行中',
-  OverdueUpgrade: '逾期升級',
-  AutoUpgrade: '自動升級',
-  Back: '退回',
+  OverdueUpgrade: '逾時自動升級中',
+  Back: '返回修改中',
   FinishAuditing: '完成審核',
   Finished: '已完成',
   Discard: '作廢',
+  Discarded: '作廢',
 };
 
 const PRIORITY_LABEL: Record<string, string> = {

@@ -5,10 +5,20 @@ import { getTaskPlannedEndAtColumn } from '@/lib/taskPlannedEndAt';
 
 export const dynamic = 'force-dynamic';
 
-// Statuses that mean the task is done — exclude these
-const DONE_STATUSES = ['Finished', 'Discard', 'Discarded', 'Close', 'Closed', 'Cancel', 'Cancelled', 'FinishAuditing'];
+// 執行中、審核中、延時執行中、自動升級中、延時申請中、逾時執行中、逾時自動升級中、返回修改中
+const ALLOWED_STATUSES = [
+  'Execute',        // 執行中 (service-request style)
+  'Executing',      // 執行中 (task style)
+  'Auditing',       // 審核中
+  'OverdueExecute', // 延時執行中 (tentative)
+  'AutoUpgrade',    // 自動升級中
+  'Send',           // 延時申請中
+  'Overdue',        // 逾時執行中
+  'OverdueUpgrade', // 逾時自動升級中
+  'Back',           // 返回修改中
+];
 
-// Exclude system/shared accounts (same as service-requests on cloud)
+// Exclude system/shared accounts
 const EXCLUDED_USER_NAMES = [
   '系統檢查授權用帳號',
   'AI大夜共用-GIOC',
@@ -67,29 +77,32 @@ export async function GET(req: Request) {
     const uId = sqlId(m.user.id);
     const uName = sqlId(m.user.displayName);
     const uAccount = m.user.account ? sqlId(m.user.account) : null;
-    const uDeptId = m.user.departmentId ? sqlId(m.user.departmentId) : null;
 
-    if (!tAssignee || !uDeptId) {
-      return Response.json({ error: 'Missing task assignee or user.departmentId mapping' }, { status: 500 });
+    if (!tAssignee) {
+      return Response.json({ error: 'Missing task assignee mapping' }, { status: 500 });
     }
 
-    // Department filter via user's department
+    // Filter tasks by people who handle service requests in this department
+    // (same department scope as service-request dashboard)
     const deptIds = [dept1Id, dept2Id].filter(Boolean) as string[];
-    let deptWhere = '';
+    let personWhere = '';
     const deptArgs: string[] = [];
     if (deptIds.length > 0) {
       const placeholders = deptIds.map(() => '?').join(', ');
-      deptWhere = ` AND u.${uDeptId} IN (${placeholders})`;
+      personWhere = ` AND t.${tAssignee} IN (
+        SELECT DISTINCT sr.FUserId FROM \`TcServiceRequest\` sr
+        WHERE sr.FDepartmentId IN (${placeholders}) AND sr.FUserId IS NOT NULL
+      )`;
       deptArgs.push(...deptIds);
     }
 
-    // Exclude done statuses
-    const doneList = DONE_STATUSES.map((s) => `'${s}'`).join(', ');
+    // Status inclusion filter
+    const allowedList = ALLOWED_STATUSES.map((s) => `'${s}'`).join(', ');
     const activeWhere = tStatus
-      ? ` AND t.${tStatus} NOT IN (${doneList}) AND t.${tPlanEnd} IS NOT NULL`
+      ? ` AND t.${tStatus} IN (${allowedList}) AND t.${tPlanEnd} IS NOT NULL`
       : ` AND t.${tPlanEnd} IS NOT NULL`;
 
-    // Exclude system accounts
+    // Exclude system accounts from display
     const excList = EXCLUDED_USER_NAMES.map((n) => `'${n.replace(/'/g, "''")}'`).join(', ');
     const userExclWhere =
       ` AND (u.${uName} NOT IN (${excList}) OR u.${uName} IS NULL)` +
@@ -111,8 +124,8 @@ export async function GET(req: Request) {
       LEFT JOIN ${P} p ON p.${pId} = t.${tProjectId}
     `;
 
-    const overdueWhere = `${deptWhere}${activeWhere}${userExclWhere} AND t.${tPlanEnd} < NOW()`;
-    const upcomingWhere = `${deptWhere}${activeWhere}${userExclWhere} AND t.${tPlanEnd} >= NOW() AND t.${tPlanEnd} < DATE_ADD(NOW(), INTERVAL 7 DAY)`;
+    const overdueWhere = `${personWhere}${activeWhere}${userExclWhere} AND t.${tPlanEnd} < NOW()`;
+    const upcomingWhere = `${personWhere}${activeWhere}${userExclWhere} AND t.${tPlanEnd} >= NOW() AND t.${tPlanEnd} < DATE_ADD(NOW(), INTERVAL 7 DAY)`;
 
     const [overdueCountRows, upcomingCountRows] = await Promise.all([
       (prisma.$queryRawUnsafe as any)(

@@ -2,7 +2,26 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import TopMenu from '@/app/_components/TopMenu';
-import { toZhStatus } from '@/lib/statusText';
+const STATUS_LABEL: Record<string, string> = {
+  New: '新建',
+  Send: '延時申請中',
+  Auditing: '審核中',
+  Execute: '執行中',
+  Executing: '執行中',
+  OverdueExecute: '延時執行中',
+  AutoUpgrade: '自動升級中',
+  Overdue: '逾時執行中',
+  OverdueUpgrade: '逾時自動升級中',
+  Back: '返回修改中',
+  FinishAuditing: '完成審核',
+  Finished: '已完成',
+  Discard: '作廢',
+  Discarded: '作廢',
+};
+function zhStatus(s: string | null) {
+  if (!s) return '-';
+  return STATUS_LABEL[s] ?? s;
+}
 
 type TaskRow = {
   id: string;
@@ -149,7 +168,7 @@ export default function TaskTrackingDashboardClient() {
                       <tr key={r.id}>
                         <td title={r.name}>{r.name}</td>
                         <td title={taskProjectLabel(r) ?? ''}>{taskProjectLabel(r) ?? '-'}</td>
-                        <td><span className="sr-status">{toZhStatus(r.status)}</span></td>
+                        <td><span className="sr-status">{zhStatus(r.status)}</span></td>
                         <td className="sr-overdue-date">{r.planEndDate ?? '-'}</td>
                         <td>{r.userName ?? '-'}</td>
                       </tr>
@@ -221,7 +240,7 @@ export default function TaskTrackingDashboardClient() {
                       <tr key={r.id}>
                         <td title={r.name}>{r.name}</td>
                         <td title={taskProjectLabel(r) ?? ''}>{taskProjectLabel(r) ?? '-'}</td>
-                        <td><span className="sr-status">{toZhStatus(r.status)}</span></td>
+                        <td><span className="sr-status">{zhStatus(r.status)}</span></td>
                         <td>{r.planEndDate ?? '-'}</td>
                         <td>{r.userName ?? '-'}</td>
                       </tr>
