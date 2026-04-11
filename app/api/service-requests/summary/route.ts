@@ -39,6 +39,7 @@ const EXCLUDED_USER_NAMES = [
   'AI林佳蓉-GIOC',
   'cs_api',
   'qbiai_user',
+  '李一新',
 ];
 
 export async function GET(req: Request) {
@@ -59,7 +60,7 @@ export async function GET(req: Request) {
     const SR = '`TcServiceRequest`';
     const D = '`TsDepartment`';
 
-    // Build department filter for service requests
+    // Department filter
     const deptIds = [dept1Id, dept2Id].filter(Boolean) as string[];
     let deptWhere = '';
     const deptArgs: string[] = [];
@@ -69,12 +70,11 @@ export async function GET(req: Request) {
       deptArgs.push(...deptIds);
     }
 
-    // Only show Auditing and Execute statuses
+    // Status inclusion filter
     const allowedList = ALLOWED_STATUSES.map((s) => `'${s}'`).join(', ');
     const activeWhere = ` AND sr.FStatus IN (${allowedList}) AND sr.FPlanEndDate IS NOT NULL`;
 
-    // Exclude system/shared accounts by name and account
-    // Use LIKE matching so names with job-title suffixes (e.g. "AI林佳蓉-GIOC (工程師)") are also excluded
+    // Use LIKE so names with job-title suffixes are also excluded
     const nameLikeClauses = EXCLUDED_USER_NAMES.map(
       (n) => `u.${uName} NOT LIKE '${n.replace(/'/g, "''")}%'`
     ).join(' AND ');
@@ -84,8 +84,11 @@ export async function GET(req: Request) {
     // Overdue: FPlanEndDate < NOW()
     const overdueWhere = `${deptWhere}${activeWhere}${userExclWhere} AND sr.FPlanEndDate < NOW()`;
 
-    // Upcoming 7 days: NOW() <= FPlanEndDate < DATE_ADD(NOW(), INTERVAL 7 DAY)
+    // Upcoming 7 days
     const upcomingWhere = `${deptWhere}${activeWhere}${userExclWhere} AND sr.FPlanEndDate >= NOW() AND sr.FPlanEndDate < DATE_ADD(NOW(), INTERVAL 7 DAY)`;
+
+    // All active (for person stats)
+    const allActiveWhere = `${deptWhere}${activeWhere}${userExclWhere}`;
 
     const selectCols = `
       sr.FId AS id,
@@ -104,32 +107,37 @@ export async function GET(req: Request) {
       LEFT JOIN ${D} d ON d.FId = sr.FDepartmentId
     `;
 
-    // Count queries
-    const [overdueCountRows, upcomingCountRows] = await Promise.all([
-      prisma.$queryRawUnsafe<Array<{ cnt: bigint }>>(
+    const [overdueCountRows, upcomingCountRows, personStatsRows] = await Promise.all([
+      (prisma.$queryRawUnsafe as any)(
         `SELECT COUNT(1) AS cnt ${joinClause} WHERE 1=1 ${overdueWhere}`,
         ...deptArgs
-      ),
-      prisma.$queryRawUnsafe<Array<{ cnt: bigint }>>(
+      ) as Promise<Array<{ cnt: bigint }>>,
+      (prisma.$queryRawUnsafe as any)(
         `SELECT COUNT(1) AS cnt ${joinClause} WHERE 1=1 ${upcomingWhere}`,
         ...deptArgs
-      ),
+      ) as Promise<Array<{ cnt: bigint }>>,
+      (prisma.$queryRawUnsafe as any)(
+        `SELECT u.${uName} AS userName, sr.FStatus AS status, COUNT(1) AS cnt
+         ${joinClause} WHERE 1=1 ${allActiveWhere}
+         GROUP BY u.${uName}, sr.FStatus
+         ORDER BY u.${uName} ASC`,
+        ...deptArgs
+      ) as Promise<Array<{ userName: string | null; status: string; cnt: bigint }>>,
     ]);
 
     const overdueTotal = Number(overdueCountRows[0]?.cnt ?? 0);
     const upcomingTotal = Number(upcomingCountRows[0]?.cnt ?? 0);
 
-    // Fetch paginated overdue
-    const overdueRows = await prisma.$queryRawUnsafe<any[]>(
-      `SELECT ${selectCols} ${joinClause} WHERE 1=1 ${overdueWhere} ORDER BY sr.FPlanEndDate ASC LIMIT ? OFFSET ?`,
-      ...deptArgs, pageSize, offset
-    );
-
-    // Fetch all upcoming (typically small number)
-    const upcomingRows = await prisma.$queryRawUnsafe<any[]>(
-      `SELECT ${selectCols} ${joinClause} WHERE 1=1 ${upcomingWhere} ORDER BY sr.FPlanEndDate ASC`,
-      ...deptArgs
-    );
+    const [overdueRows, upcomingRows] = await Promise.all([
+      (prisma.$queryRawUnsafe as any)(
+        `SELECT ${selectCols} ${joinClause} WHERE 1=1 ${overdueWhere} ORDER BY sr.FPlanEndDate ASC LIMIT ? OFFSET ?`,
+        ...deptArgs, pageSize, offset
+      ) as Promise<any[]>,
+      (prisma.$queryRawUnsafe as any)(
+        `SELECT ${selectCols} ${joinClause} WHERE 1=1 ${upcomingWhere} ORDER BY sr.FPlanEndDate ASC`,
+        ...deptArgs
+      ) as Promise<any[]>,
+    ]);
 
     const fmt = (rows: any[]) =>
       rows.map((r) => ({
@@ -143,6 +151,12 @@ export async function GET(req: Request) {
         deptName: r.deptName ? String(r.deptName) : null,
       }));
 
+    const personStats = personStatsRows.map((r) => ({
+      userName: r.userName ? String(r.userName) : '(未知)',
+      status: String(r.status ?? ''),
+      cnt: Number(r.cnt ?? 0),
+    }));
+
     return Response.json({
       overdue: fmt(overdueRows),
       overdueTotal,
@@ -150,6 +164,7 @@ export async function GET(req: Request) {
       overduePageSize: pageSize,
       upcoming: fmt(upcomingRows),
       upcomingTotal,
+      personStats,
     });
   } catch (e: any) {
     console.error('[service-requests/summary]', e);
