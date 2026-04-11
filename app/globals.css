@@ -1014,6 +1014,7 @@ body{
   font-weight: 700;
 }
 .ps-zero{ color: rgba(255,255,255,0.2); }
+.ps-row--total td{ border-top: 2px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.04); }
 
 @media (max-width: 980px){
   .cards{ grid-template-columns: repeat(2, minmax(0, 1fr)); }
