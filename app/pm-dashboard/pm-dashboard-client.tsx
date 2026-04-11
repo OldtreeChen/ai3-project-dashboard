@@ -4,6 +4,13 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import TopMenu from '../_components/TopMenu';
 import { toZhStatus } from '@/lib/statusText';
 
+const PM_STAT_STATUSES = [
+  'Assigned', 'New', 'Executing', 'ExecuteAuditing', 'ExecuteBack',
+  'Overdue', 'OverdueUpgrade', 'AutoUpgrade',
+] as const;
+
+const PM_OVERDUE_STATUSES = new Set(['Overdue', 'OverdueUpgrade']);
+
 type OwnerRow = {
   owner_id: string | number;
   owner_name: string;
@@ -16,8 +23,11 @@ type OwnerRow = {
 
 type Department = { id: string | number; name: string };
 
+type PmStatusStatRow = { owner_name: string; status: string; cnt: number };
+
 type SummaryResponse = {
   owners: OwnerRow[];
+  pmStatusStats?: PmStatusStatRow[];
   project_type_map?: Record<string, string>;
 };
 
@@ -71,6 +81,7 @@ export default function PmDashboardClient() {
   const [departmentId, setDepartmentId] = useState<string>('');
   const [ownerFilterId, setOwnerFilterId] = useState<string>('');
 
+  const [pmStatusStats, setPmStatusStats] = useState<PmStatusStatRow[]>([]);
   const [projectTypeMap, setProjectTypeMap] = useState<Record<string, string>>({});
   // store raw type values selected (server-side values)
   const [selectedProjectTypeValues, setSelectedProjectTypeValues] = useState<string[]>([]);
@@ -98,6 +109,23 @@ export default function PmDashboardClient() {
     const remaining_load_months = remaining_hours / 900;
     return { project_count, planned_hours, used_hours, remaining_hours, remaining_load_months };
   }, [owners]);
+
+  const pmStatusPivot = useMemo(() => {
+    if (!pmStatusStats.length) return [];
+    const map = new Map<string, Record<string, number>>();
+    for (const r of pmStatusStats) {
+      if (!map.has(r.owner_name)) map.set(r.owner_name, {});
+      map.get(r.owner_name)![r.status] = r.cnt;
+    }
+    return Array.from(map.entries())
+      .map(([name, counts]) => ({
+        name,
+        counts,
+        overdueCnt: (counts['Overdue'] ?? 0) + (counts['OverdueUpgrade'] ?? 0),
+        total: Object.values(counts).reduce((a, b) => a + b, 0),
+      }))
+      .sort((a, b) => b.overdueCnt - a.overdueCnt || b.total - a.total);
+  }, [pmStatusStats]);
 
   const projectTypeOptions = useMemo(() => {
     const entries = Object.entries(projectTypeMap || {});
@@ -149,6 +177,7 @@ export default function PmDashboardClient() {
         const q = buildQuery({ departmentId, projectTypes: selectedProjectTypesParam });
         const data = await apiGet<SummaryResponse>(`/api/pm-dashboard/summary${q}`);
         setOwnerOptions(data.owners || []);
+        if (data.pmStatusStats) setPmStatusStats(data.pmStatusStats);
         if (data.project_type_map) setProjectTypeMap(data.project_type_map);
       } catch (e: any) {
         setError(e?.message || '載入失敗');
@@ -169,6 +198,7 @@ export default function PmDashboardClient() {
         const data = await apiGet<SummaryResponse>(`/api/pm-dashboard/summary${q}`);
         const nextOwners = data.owners || [];
         setOwners(nextOwners);
+        if (data.pmStatusStats) setPmStatusStats(data.pmStatusStats);
         if (data.project_type_map) setProjectTypeMap(data.project_type_map);
 
         // if current selection is not in the filtered summary, clear details
@@ -378,6 +408,45 @@ export default function PmDashboardClient() {
             </div>
           </section>
         ) : null}
+
+        {!loading && pmStatusPivot.length > 0 && (
+          <section className="sr-section sr-section--ps" style={{ marginBottom: 12 }}>
+            <div className="sr-section__header">
+              <h2 className="sr-section__title">PM 專案狀態統計</h2>
+            </div>
+            <div className="ps-scroll">
+              <table className="ps-table">
+                <thead>
+                  <tr>
+                    <th className="ps-col--name">PM</th>
+                    {PM_STAT_STATUSES.map((s) => (
+                      <th key={s} className={`ps-col--status${PM_OVERDUE_STATUSES.has(s) ? ' ps-col--alert' : ''}`}>
+                        {toZhStatus(s)}
+                      </th>
+                    ))}
+                    <th className="ps-col--total">合計</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pmStatusPivot.map(({ name, counts, total }) => (
+                    <tr key={name}>
+                      <td className="ps-col--name">{name}</td>
+                      {PM_STAT_STATUSES.map((s) => {
+                        const v = counts[s] ?? 0;
+                        return (
+                          <td key={s} className={`ps-col--status${PM_OVERDUE_STATUSES.has(s) && v > 0 ? ' ps-val--alert' : ''}`}>
+                            {v > 0 ? v : <span className="ps-zero">-</span>}
+                          </td>
+                        );
+                      })}
+                      <td className="ps-col--total">{total}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
 
         <section className="panel">
           <div className="panel__header">

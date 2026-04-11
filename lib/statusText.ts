@@ -7,6 +7,7 @@ export const STATUS_ZH_MAP: Record<string, string> = {
   Executing: '執行中',
   Auditing: '審核中',
   Back: '返回修改中',
+  ExecuteAuditing: '執行審核中',
   ExecuteBack: '返回修改中',
   FinishBack: '返回修改中',
   Finished: '已關閉',

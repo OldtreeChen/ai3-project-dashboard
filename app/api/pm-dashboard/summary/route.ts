@@ -133,7 +133,32 @@ export async function GET(req: Request) {
       ORDER BY remaining_hours DESC, planned_hours DESC, owner_name ASC
     `;
 
-    const rows = await prisma.$queryRawUnsafe<any[]>(sql, ...subArgs, ...args);
+    // Status stats query: same filters (flat join), grouped by owner + project status
+    const outerConditions = outerWhere.replace(/^WHERE 1=1/, '');
+    const statusStatsSql = pStatus
+      ? `
+        SELECT u.${uName} AS owner_name, p.${pStatus} AS status, COUNT(1) AS cnt
+        FROM ${P} p
+        ${D && dId && dName && pDeptId ? `LEFT JOIN ${D} dp ON dp.${dId} = p.${pDeptId}` : ''}
+        LEFT JOIN ${U} u ON u.${uId} = p.${pOwner}
+        ${D && dId && dName && uDeptId ? `LEFT JOIN ${D} d ON d.${dId} = u.${uDeptId}` : ''}
+        WHERE p.${pName} NOT LIKE '%新人%'
+          AND (p.${pName} LIKE '【AI】%' OR p.${pName} LIKE 'AI】%')
+          ${executingFilter}
+          ${projectDeptFilter}
+          ${projectTypeFilter}
+          ${outerConditions}
+        GROUP BY p.${pOwner}, u.${uName}, p.${pStatus}
+        ORDER BY u.${uName} ASC
+      `
+      : null;
+
+    const [rows, statusStatsRaw] = await Promise.all([
+      prisma.$queryRawUnsafe<any[]>(sql, ...subArgs, ...args),
+      statusStatsSql
+        ? (prisma.$queryRawUnsafe as any)(statusStatsSql, ...subArgs, ...args) as Promise<any[]>
+        : Promise.resolve([]),
+    ]);
 
     // normalize BigInt/Decimal-ish values for JSON safety
     const owners = rows.map((r) => {
@@ -150,6 +175,12 @@ export async function GET(req: Request) {
         remaining_load_months: remaining / 900
       };
     });
+
+    const pmStatusStats = statusStatsRaw.map((r: any) => ({
+      owner_name: r.owner_name ? String(r.owner_name) : '(未知)',
+      status: String(r.status ?? ''),
+      cnt: Number(r.cnt ?? 0),
+    }));
 
     // also return a quick type mapping hint (best-effort)
     const typeValues = pType
@@ -175,7 +206,7 @@ export async function GET(req: Request) {
       : [];
     const dict = await getProjectTypeTextsByValues(typeValues);
 
-    return Response.json({ owners, project_type_map: Object.fromEntries(dict.entries()) });
+    return Response.json({ owners, pmStatusStats, project_type_map: Object.fromEntries(dict.entries()) });
   } catch (err: any) {
     const message = err?.message ? String(err.message) : 'unknown error';
     return Response.json({ ok: false, error: message }, { status: 500 });
