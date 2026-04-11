@@ -53,7 +53,7 @@ export async function GET(req: Request) {
     const tName = sqlId(m.task.name);
     const tProjectId = sqlId(m.task.projectId);
     const tStatus = m.task.status ? sqlId(m.task.status) : null;
-    const tPlanEnd = sqlId(plannedEndCol);
+    const tPlanEnd = sqlId(plannedEndCol || (m.task.plannedEndAt ?? 'FPredictEndDate'));
     const tAssignee = m.task.executorUserId
       ? sqlId(m.task.executorUserId)
       : m.task.ownerUserId
