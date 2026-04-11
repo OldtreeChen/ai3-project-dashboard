@@ -5,15 +5,14 @@ import { getTaskPlannedEndAtColumn } from '@/lib/taskPlannedEndAt';
 
 export const dynamic = 'force-dynamic';
 
-// 執行中、審核中、自動升級中、延時申請中、逾時執行中、逾時自動升級中、返回修改中
 const ALLOWED_STATUSES = [
-  'Executing',      // 執行中
-  'Auditing',       // 審核中
-  'AutoUpgrade',    // 自動升級中
-  'Prolong',        // 延時申請中
-  'Overdue',        // 逾時執行中
-  'OverdueUpgrade', // 逾時自動升級中
-  'Back',           // 返回修改中
+  'Executing',
+  'Auditing',
+  'AutoUpgrade',
+  'Prolong',
+  'Overdue',
+  'OverdueUpgrade',
+  'Back',
 ];
 
 function fmtDatetime(v: any): string | null {
@@ -63,24 +62,21 @@ export async function GET(req: Request) {
 
     const uId = sqlId(m.user.id);
     const uName = sqlId(m.user.displayName);
-    const uAccount = m.user.account ? sqlId(m.user.account) : null;
     const uDeptId = m.user.departmentId ? sqlId(m.user.departmentId) : null;
 
-    if (!tAssignee) {
-      return Response.json({ error: 'Missing task assignee mapping' }, { status: 500 });
+    if (!tAssignee || !uDeptId) {
+      return Response.json({ error: 'Missing task assignee or user departmentId mapping' }, { status: 500 });
     }
 
-    // Build dept + user exclusion WHERE using shared whitelist helper
     const { where: wlWhere, args: wlArgs } = buildWhitelistWhere({
       uName,
       uDeptId,
-      uAccount,
+      uAccount: null,
       departmentId: null,
       dept1Id,
       dept2Id,
     });
 
-    // Status inclusion filter
     const allowedList = ALLOWED_STATUSES.map((s) => `'${s}'`).join(', ');
     const activeWhere = tStatus
       ? ` AND t.${tStatus} IN (${allowedList}) AND t.${tPlanEnd} IS NOT NULL`
@@ -106,7 +102,8 @@ export async function GET(req: Request) {
       p.${pName} AS projectName
     `;
 
-    const [overdueCountRows, upcomingCountRows, personStatsRows] = await Promise.all([
+    // All 5 queries run in parallel — none depend on each other's results
+    const [overdueCountRows, upcomingCountRows, personStatsRows, overdueRows, upcomingRows] = await Promise.all([
       (prisma.$queryRawUnsafe as any)(
         `SELECT COUNT(1) AS cnt ${joinClause} WHERE 1=1 ${overdueWhere}`,
         ...wlArgs
@@ -124,18 +121,12 @@ export async function GET(req: Request) {
             ...wlArgs
           ) as Promise<Array<{ userName: string | null; status: string | null; cnt: bigint }>>
         : Promise.resolve([] as Array<{ userName: string | null; status: string | null; cnt: bigint }>),
-    ]);
-
-    const overdueTotal = Number(overdueCountRows[0]?.cnt ?? 0);
-    const upcomingTotal = Number(upcomingCountRows[0]?.cnt ?? 0);
-
-    const [overdueRows, upcomingRows] = await Promise.all([
       (prisma.$queryRawUnsafe as any)(
         `SELECT ${selectCols} ${joinClause} WHERE 1=1 ${overdueWhere} ORDER BY t.${tPlanEnd} ASC LIMIT ? OFFSET ?`,
         ...wlArgs, pageSize, offset
       ) as Promise<any[]>,
       (prisma.$queryRawUnsafe as any)(
-        `SELECT ${selectCols} ${joinClause} WHERE 1=1 ${upcomingWhere} ORDER BY t.${tPlanEnd} ASC`,
+        `SELECT ${selectCols} ${joinClause} WHERE 1=1 ${upcomingWhere} ORDER BY t.${tPlanEnd} ASC LIMIT 200`,
         ...wlArgs
       ) as Promise<any[]>,
     ]);
@@ -159,11 +150,11 @@ export async function GET(req: Request) {
 
     return Response.json({
       overdue: fmt(overdueRows),
-      overdueTotal,
+      overdueTotal: Number(overdueCountRows[0]?.cnt ?? 0),
       overduePage: page,
       overduePageSize: pageSize,
       upcoming: fmt(upcomingRows),
-      upcomingTotal,
+      upcomingTotal: Number(upcomingCountRows[0]?.cnt ?? 0),
       personStats,
     });
   } catch (e: any) {
