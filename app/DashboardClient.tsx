@@ -99,6 +99,10 @@ export default function DashboardClient() {
   const [summary, setSummary] = useState<any>(null);
   const [peopleBreakdown, setPeopleBreakdown] = useState<any>(null);
   const [tasksBreakdown, setTasksBreakdown] = useState<any>(null);
+  const [milestones, setMilestones] = useState<Array<{
+    id: string; name: string; plan_date: string | null; actual_date: string | null;
+    status: string | null; description: string | null;
+  }>>([]);
 
   const [selectedPersonId, setSelectedPersonId] = useState<string>('');
   const [personTasksLoading, setPersonTasksLoading] = useState(false);
@@ -194,14 +198,16 @@ export default function DashboardClient() {
     setLoading(true);
     setError('');
     try {
-      const [s, pb, tb] = await Promise.all([
+      const [s, pb, tb, ms] = await Promise.all([
         apiGet(`/api/projects/${projectId}/summary`),
         apiGet(`/api/projects/${projectId}/people-breakdown`),
-        apiGet(`/api/projects/${projectId}/tasks-breakdown`)
+        apiGet(`/api/projects/${projectId}/tasks-breakdown`),
+        apiGet<{ milestones: any[] }>(`/api/projects/${projectId}/milestones`),
       ]);
       setSummary(s);
       setPeopleBreakdown(pb);
       setTasksBreakdown(tb);
+      setMilestones(ms.milestones || []);
     } catch (e: any) {
       setError(e?.message || '載入失敗');
     } finally {
@@ -391,6 +397,48 @@ export default function DashboardClient() {
             </div>
           </div>
         </section>
+
+        {milestones.length > 0 && (
+          <section className="panel" style={{ marginTop: 12 }}>
+            <div className="panel__header">
+              <div className="panel__title">專案里程碑</div>
+              <div className="panel__meta">{milestones.length} 個</div>
+            </div>
+            <div className="panel__body">
+              <div className="table-scroll">
+                <table className="table milestone-table">
+                  <thead>
+                    <tr>
+                      <th>里程碑名稱</th>
+                      <th>計畫日期</th>
+                      <th>實際完成日期</th>
+                      <th>狀態</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {milestones.map((ms) => {
+                      const overdue =
+                        ms.plan_date && !ms.actual_date
+                          ? new Date(ms.plan_date).getTime() < Date.now()
+                          : false;
+                      return (
+                        <tr key={ms.id}>
+                          <td title={ms.description || undefined}>{ms.name}</td>
+                          <td className={overdue ? 'milestone-date--overdue' : ''}>
+                            {ms.plan_date || <span className="muted">--</span>}
+                            {overdue && <span className="badge badge--bad" style={{ marginLeft: 6 }}>逾期</span>}
+                          </td>
+                          <td>{ms.actual_date || <span className="muted">--</span>}</td>
+                          <td>{ms.status ? toZhStatus(ms.status) : <span className="muted">--</span>}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+        )}
 
         <section className="panel" style={{ marginTop: 12 }}>
           <div className="panel__header">

@@ -1002,6 +1002,7 @@ body{
 .ps-val--alert{ color: var(--bad); font-weight: 700; }
 .ps-zero{ color: rgba(255,255,255,0.2); }
 .ps-row--total td{ border-top: 2px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.04); }
+.milestone-date--overdue{ color: var(--bad); }
 
 /* Wider content area */
 .content--wide{

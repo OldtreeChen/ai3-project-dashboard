@@ -518,6 +518,19 @@ export default function PmDashboardClient() {
                     </tr>
                   )}
                 </tbody>
+                {owners.length > 0 && (
+                  <tfoot>
+                    <tr className="ps-row--total">
+                      <td>合計</td>
+                      <td className="num">{Number(totals.project_count || 0)}</td>
+                      <td className="num">{fmtHours(totals.planned_hours)}</td>
+                      <td className="num">{fmtHours(totals.used_hours)}</td>
+                      <td className="num">{fmtHours(totals.remaining_hours)}</td>
+                      <td className="num">{fmtMonths(totals.remaining_load_months)}</td>
+                      <td />
+                    </tr>
+                  </tfoot>
+                )}
               </table>
             </div>
           </div>
