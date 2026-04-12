@@ -398,44 +398,48 @@ export default function DashboardClient() {
           </div>
         </section>
 
-        {milestones.length > 0 && (
+        {!loading && (
           <section className="panel" style={{ marginTop: 12 }}>
             <div className="panel__header">
               <div className="panel__title">專案里程碑</div>
               <div className="panel__meta">{milestones.length} 個</div>
             </div>
             <div className="panel__body">
-              <div className="table-scroll">
-                <table className="table milestone-table">
-                  <thead>
-                    <tr>
-                      <th>里程碑名稱</th>
-                      <th>計畫日期</th>
-                      <th>實際完成日期</th>
-                      <th>狀態</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {milestones.map((ms) => {
-                      const overdue =
-                        ms.plan_date && !ms.actual_date
-                          ? new Date(ms.plan_date).getTime() < Date.now()
-                          : false;
-                      return (
-                        <tr key={ms.id}>
-                          <td title={ms.description || undefined}>{ms.name}</td>
-                          <td className={overdue ? 'milestone-date--overdue' : ''}>
-                            {ms.plan_date || <span className="muted">--</span>}
-                            {overdue && <span className="badge badge--bad" style={{ marginLeft: 6 }}>逾期</span>}
-                          </td>
-                          <td>{ms.actual_date || <span className="muted">--</span>}</td>
-                          <td>{ms.status ? toZhStatus(ms.status) : <span className="muted">--</span>}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+              {milestones.length === 0 ? (
+                <div className="muted" style={{ padding: '8px 0' }}>此專案無里程碑設定</div>
+              ) : (
+                <div className="table-scroll">
+                  <table className="table milestone-table">
+                    <thead>
+                      <tr>
+                        <th>里程碑名稱</th>
+                        <th>計畫日期</th>
+                        <th>實際完成日期</th>
+                        <th>狀態</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {milestones.map((ms) => {
+                        const overdue =
+                          ms.plan_date && !ms.actual_date
+                            ? new Date(ms.plan_date).getTime() < Date.now()
+                            : false;
+                        return (
+                          <tr key={ms.id}>
+                            <td title={ms.description || undefined}>{ms.name}</td>
+                            <td className={overdue ? 'milestone-date--overdue' : ''}>
+                              {ms.plan_date || <span className="muted">--</span>}
+                              {overdue && <span className="badge badge--bad" style={{ marginLeft: 6 }}>逾期</span>}
+                            </td>
+                            <td>{ms.actual_date || <span className="muted">--</span>}</td>
+                            <td>{ms.status ? toZhStatus(ms.status) : <span className="muted">--</span>}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </section>
         )}

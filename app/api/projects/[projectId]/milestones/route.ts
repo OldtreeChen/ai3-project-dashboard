@@ -88,12 +88,19 @@ export async function GET(_req: Request, ctx: { params: Promise<{ projectId: str
       LIMIT 100
     `;
 
+    const toDateStr = (v: unknown): string | null => {
+      if (!v) return null;
+      if (v instanceof Date) return v.toISOString().slice(0, 10);
+      const s = String(v);
+      return /^\d{4}/.test(s) ? s.slice(0, 10) : null;
+    };
+
     const rows = await prisma.$queryRawUnsafe<MilestoneRow[]>(sql, projectId);
     const milestones = rows.map((r) => ({
       id: String(r.id),
       name: String(r.name || ''),
-      plan_date: r.plan_date ? String(r.plan_date).slice(0, 10) : null,
-      actual_date: r.actual_date ? String(r.actual_date).slice(0, 10) : null,
+      plan_date: toDateStr(r.plan_date),
+      actual_date: toDateStr(r.actual_date),
       status: r.status ? String(r.status) : null,
       description: r.description ? String(r.description) : null,
       sort_order: Number(r.sort_order ?? 0),

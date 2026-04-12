@@ -167,11 +167,18 @@ export async function GET(req: Request) {
       (prisma.$queryRawUnsafe as any)(upcomingProjectsSql, ...deptArgs) as Promise<any[]>,
     ]);
 
+    const toDateStr = (v: unknown): string | null => {
+      if (!v) return null;
+      if (v instanceof Date) return v.toISOString().slice(0, 10);
+      const s = String(v);
+      return /^\d{4}/.test(s) ? s.slice(0, 10) : null;
+    };
+
     const mapProject = (r: any) => ({
       id: String(r.id),
       name: String(r.name || ''),
       status: r.status ? String(r.status) : null,
-      plan_end_date: r.plan_end_date ? String(r.plan_end_date).slice(0, 10) : null,
+      plan_end_date: toDateStr(r.plan_end_date),
       owner_name: r.owner_name ? String(r.owner_name) : null,
       dept_name: r.dept_name ? String(r.dept_name) : null,
     });
@@ -181,7 +188,7 @@ export async function GET(req: Request) {
       milestone_name: String(r.milestone_name || ''),
       project_id: String(r.project_id),
       project_name: String(r.project_name || ''),
-      plan_date: r.plan_date ? String(r.plan_date).slice(0, 10) : null,
+      plan_date: toDateStr(r.plan_date),
       status: r.status ? String(r.status) : null,
       owner_name: r.owner_name ? String(r.owner_name) : null,
       dept_name: r.dept_name ? String(r.dept_name) : null,
