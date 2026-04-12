@@ -12,6 +12,7 @@ const LINKS: LinkItem[] = [
   { href: '/checkin-month-dashboard', label: '月度出勤打卡追蹤' },
   { href: '/gitlab-dashboard', label: 'GitLab 專案追蹤' },
   { href: '/task-tracking-dashboard', label: '任務追蹤' },
+  { href: '/project-tracking-dashboard', label: '專案追蹤' },
 ];
 
 export default function TopMenu() {

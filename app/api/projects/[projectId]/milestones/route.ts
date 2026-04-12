@@ -65,8 +65,8 @@ export async function GET(_req: Request, ctx: { params: Promise<{ projectId: str
     const fId = pick(cols, ['FId', 'id', 'milestoneId', 'milestone_id']);
     const fName = pick(cols, ['FName', 'FTitle', 'name', 'title', 'milestoneName', 'milestone_name']);
     const fProjectId = pick(cols, ['FProjectId', 'projectId', 'project_id', 'prjId']);
-    const fPlanDate = pick(cols, ['FPlanDate', 'FPlanEndDate', 'planDate', 'plan_date', 'plannedDate', 'planned_date']);
-    const fActualDate = pick(cols, ['FActualDate', 'FCompleteDate', 'actualDate', 'actual_date', 'completedDate', 'completed_date']);
+    const fPlanDate = pick(cols, ['FFinishDate', 'FPlanDate', 'FPlanEndDate', 'planDate', 'plan_date', 'plannedDate', 'planned_date', 'finishDate', 'finish_date']);
+    const fActualDate = pick(cols, ['FFirstFinishDate', 'FActualDate', 'FCompleteDate', 'actualDate', 'actual_date', 'completedDate', 'completed_date']);
     const fStatus = pick(cols, ['FStatus', 'status', 'state']);
     const fDesc = pick(cols, ['FDescription', 'FRemark', 'description', 'remark', 'memo', 'note']);
     const fSort = pick(cols, ['FSequence', 'FSort', 'FOrder', 'sequence', 'sort', 'sort_order', 'orderNo', 'order_no']);
