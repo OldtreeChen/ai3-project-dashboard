@@ -56,6 +56,7 @@ export const EXCLUDED_USERS: ExcludedUser[] = [
   // 僅排除 dept-month/attendance/checkin，納入 PM 負載彙總表
   { name: '陳治瑋', excludeFrom: ['dept-month', 'attendance', 'checkin', 'people'] },
   { name: '陳慕霖', excludeFrom: ['dept-month', 'attendance', 'checkin', 'people'] },
+  { name: '周政德', excludeFrom: ['dept-month', 'attendance', 'checkin', 'people'] },
   // 僅排除特定部門
   { name: '廖明信', dept: 'dept1' },  // 專案一部排除，二部保留
   { name: '鄭翔之', dept: 'dept1' },  // 專案一部排除
