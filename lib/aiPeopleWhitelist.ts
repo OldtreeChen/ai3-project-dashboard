@@ -20,6 +20,7 @@ export const EXCLUDED_USERS: ExcludedUser[] = [
   { name: 'cs_api' },
   { name: 'qbiai_user' },
   { name: '李一新' },
+  { name: '朱笑宗' },
   // 全部門、全儀表板排除
   { name: '沈子欽' },
   { name: '丁奕荳' },
