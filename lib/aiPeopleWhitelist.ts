@@ -11,6 +11,15 @@ export type DashboardScope = 'pm' | 'dept-month' | 'attendance' | 'checkin' | 'p
 type ExcludedUser = { name: string; dept?: 'dept1' | 'dept2'; excludeFrom?: DashboardScope[] };
 
 export const EXCLUDED_USERS: ExcludedUser[] = [
+  // 共用帳號／系統帳號（與服務請求追蹤排除名單一致）
+  { name: 'AI大夜共用' },
+  { name: 'AI小夜共用' },
+  { name: 'AI呂佳珍' },
+  { name: 'AI林佳蓉' },
+  { name: '系統檢查授權用帳號' },
+  { name: 'cs_api' },
+  { name: 'qbiai_user' },
+  { name: '李一新' },
   // 全部門、全儀表板排除
   { name: '沈子欽' },
   { name: '丁奕荳' },
