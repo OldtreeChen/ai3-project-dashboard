@@ -14,6 +14,8 @@ type CiDay = {
   punch_count: number;
 };
 
+type LeaveEntry = { leave_type: string | null; leave_hours: number };
+
 type PersonRow = {
   person_id: string;
   display_name: string;
@@ -21,6 +23,7 @@ type PersonRow = {
   days: Record<string, CiDay>;
   total_checkin_days: number;
   total_late_count: number;
+  leaves?: Record<string, LeaveEntry[]>;
 };
 
 type SummaryResponse = {
@@ -83,6 +86,44 @@ function isPast(dateStr: string) {
   return target.getTime() < now.getTime();
 }
 
+const LEAVE_ABBR: Record<string, string> = {
+  'Annual Leave': '年假',
+  'Sick Leave': '病假',
+  'Personal Leave': '事假',
+  'Compensatory Leave': '補假',
+  'Offical Leave': '公假',
+  'Birthday Leave': '生日假',
+  '生日假': '生日假',
+  'Maternity Leave': '產假',
+  'Paternity Leave': '陪產假',
+  'Family care Leave': '家照假',
+  'Funeral Leave': '喪假',
+  'Marriage Leave': '婚假',
+  'Menstrual Leave': '生理假',
+  'Physiological Leave': '生理假',
+  'Seized fake': '補休',
+  'Seized Leave': '補休',
+  'Home Leave': '居家假',
+  'Inductrial injury Leave': '工傷假',
+  '疫苗接種假': '疫苗假',
+  '防疫照顧假': '防疫假',
+};
+
+function leaveAbbr(type: string | null): string {
+  if (!type) return '假';
+  return LEAVE_ABBR[type] || type;
+}
+
+function getDayLeaveInfo(leaves: LeaveEntry[] | undefined): { hasLeave: boolean; isFullDay: boolean; label: string; tipText: string } {
+  if (!leaves || leaves.length === 0) return { hasLeave: false, isFullDay: false, label: '', tipText: '' };
+  const totalHours = leaves.reduce((s, l) => s + l.leave_hours, 0);
+  const isFullDay = totalHours >= 8;
+  const types = [...new Set(leaves.map((l) => leaveAbbr(l.leave_type)))];
+  const label = types.join('/');
+  const tipText = `請假: ${label} (${totalHours}h)`;
+  return { hasLeave: true, isFullDay, label, tipText };
+}
+
 export default function CheckinMonthDashboardClient() {
   const [deptLabel, setDeptLabel] = useState<string>('');
   const [month, setMonth] = useState<string>(toMonthValue());
@@ -102,12 +143,29 @@ export default function CheckinMonthDashboardClient() {
 
   const totals = useMemo(() => {
     const count = people.length;
-    const totalCheckinDays = people.reduce((acc, p) => acc + p.total_checkin_days, 0);
-    const totalLateDays = people.reduce((acc, p) => acc + p.total_late_count, 0);
-    const expectedDays = count * pastWorkdays.length;
+    let totalCheckinDays = 0;
+    let totalLateDays = 0;
+    let totalLeaveDays = 0;
+    let expectedDays = 0;
+    for (const p of people) {
+      for (const d of pastWorkdays) {
+        const ci = p.days[d];
+        const { hasLeave, isFullDay } = getDayLeaveInfo(p.leaves?.[d]);
+        if (ci) {
+          totalCheckinDays++;
+          if (ci.late_minutes != null && ci.late_minutes > 0) totalLateDays++;
+          expectedDays++;
+        } else if (hasLeave && isFullDay) {
+          totalLeaveDays++;
+          // full-day leave: not counted in expected checkin days
+        } else {
+          expectedDays++;
+        }
+      }
+    }
     const missingDays = expectedDays - totalCheckinDays;
     const checkinRate = expectedDays > 0 ? (totalCheckinDays / expectedDays) * 100 : 100;
-    return { count, totalCheckinDays, totalLateDays, expectedDays, missingDays, checkinRate };
+    return { count, totalCheckinDays, totalLateDays, totalLeaveDays, expectedDays, missingDays, checkinRate };
   }, [people, pastWorkdays]);
 
   useEffect(() => {
@@ -214,6 +272,12 @@ export default function CheckinMonthDashboardClient() {
                   )}
                 </div>
               </div>
+              <div className="summary-strip__item">
+                <div className="summary-strip__label">請假天數</div>
+                <div className="summary-strip__value">
+                  <span style={{ color: 'var(--primary)' }}>{totals.totalLeaveDays}</span>
+                </div>
+              </div>
             </div>
           </div>
         </section>
@@ -238,6 +302,7 @@ export default function CheckinMonthDashboardClient() {
                 <span className="att-dot att-dot--miss" style={{ marginLeft: 8 }} /> 缺卡
                 <span className="att-dot att-dot--future" style={{ marginLeft: 8 }} /> 未到
                 <span className="att-dot att-dot--weekend" style={{ marginLeft: 8 }} /> 假日
+                <span style={{ marginLeft: 8, display: 'inline-block', width: 10, height: 10, borderRadius: 2, background: 'rgba(96,165,250,0.5)', verticalAlign: 'middle' }} /> 請假
               </span>
             </div>
           </div>
@@ -268,7 +333,11 @@ export default function CheckinMonthDashboardClient() {
                 <tbody>
                   {people.length ? (
                     people.map((p) => {
-                      const missCount = pastWorkdays.filter((d) => !p.days[d]).length;
+                      const missCount = pastWorkdays.filter((d) => {
+                        if (p.days[d]) return false;
+                        const { hasLeave, isFullDay } = getDayLeaveInfo(p.leaves?.[d]);
+                        return !(hasLeave && isFullDay);
+                      }).length;
                       return (
                         <tr key={p.person_id}>
                           <td className="att-table__sticky-name" title={p.display_name}>
@@ -300,6 +369,8 @@ export default function CheckinMonthDashboardClient() {
                             const isWork = workdaySet.has(d);
                             const isOff = !isWork;
                             const hol = holidays[d];
+                            const { hasLeave, isFullDay, label: leaveLabel, tipText: leaveTip } = getDayLeaveInfo(p.leaves?.[d]);
+
                             let cls = 'att-cell';
                             if (isOff) {
                               cls += ci ? ' att-cell--weekend-has' : ' att-cell--weekend';
@@ -308,6 +379,10 @@ export default function CheckinMonthDashboardClient() {
                             } else if (ci) {
                               const isLate = ci.late_minutes != null && ci.late_minutes > 0;
                               cls += isLate ? ' att-cell--partial' : ' att-cell--ok';
+                            } else if (hasLeave && isFullDay) {
+                              cls += ' att-cell--leave';
+                            } else if (hasLeave) {
+                              cls += ' att-cell--leave-partial';
                             } else {
                               cls += ' att-cell--miss';
                             }
@@ -315,6 +390,7 @@ export default function CheckinMonthDashboardClient() {
                             // Tooltip
                             const tipParts = [p.display_name, `${d} (${weekdayLabel(d)})`];
                             if (hol) tipParts.push(hol);
+                            if (leaveTip) tipParts.push(leaveTip);
                             if (ci) {
                               if (ci.clock_in) tipParts.push(`上班: ${ci.clock_in}`);
                               if (ci.clock_out) tipParts.push(`下班: ${ci.clock_out}`);
@@ -322,11 +398,11 @@ export default function CheckinMonthDashboardClient() {
                               if (ci.leave_early_minutes && ci.leave_early_minutes > 0) tipParts.push(`早退 ${ci.leave_early_minutes} 分鐘`);
                               tipParts.push(`打卡 ${ci.punch_count} 次`);
                             } else {
-                              tipParts.push(isOff ? (hol || '假日') : past ? '未打卡' : '未到');
+                              tipParts.push(isOff ? (hol || '假日') : past ? (hasLeave ? '' : '未打卡') : '未到');
                             }
 
                             // Cell content
-                            let content = '';
+                            let content: React.ReactNode = '';
                             if (ci) {
                               if (ci.late_minutes && ci.late_minutes > 0) {
                                 content = `遲${ci.late_minutes}`;
@@ -335,6 +411,8 @@ export default function CheckinMonthDashboardClient() {
                               } else {
                                 content = 'V';
                               }
+                            } else if (hasLeave && isWork && past) {
+                              content = leaveLabel;
                             } else if (isWork && past) {
                               content = '--';
                             }
@@ -343,9 +421,9 @@ export default function CheckinMonthDashboardClient() {
                               <td
                                 key={d}
                                 className={`${cls}${isToday(d) ? ' att-table__day--today' : ''}`}
-                                title={tipParts.join('\n')}
+                                title={tipParts.filter(Boolean).join('\n')}
                               >
-                                <div style={{ fontSize: ci?.late_minutes && ci.late_minutes > 0 ? 10 : 11, lineHeight: 1.3 }}>
+                                <div style={{ fontSize: 10, lineHeight: 1.3 }}>
                                   {content}
                                 </div>
                                 {ci && ci.clock_out && past ? (
