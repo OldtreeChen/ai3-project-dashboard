@@ -154,7 +154,7 @@ export default function CheckinMonthDashboardClient() {
         const { hasLeave, isFullDay } = getDayLeaveInfo(p.leaves?.[d]);
         if (ci) {
           totalCheckinDays++;
-          if (ci.late_minutes != null && ci.late_minutes > 0) totalLateDays++;
+          if (ci.late_minutes != null && ci.late_minutes > 0 && !hasLeave) totalLateDays++;
           expectedDays++;
         } else if (hasLeave && isFullDay) {
           totalLeaveDays++;
@@ -395,7 +395,13 @@ export default function CheckinMonthDashboardClient() {
                               cls += ' att-cell--future';
                             } else if (ci) {
                               const isLate = ci.late_minutes != null && ci.late_minutes > 0;
-                              cls += isLate ? ' att-cell--partial' : ' att-cell--ok';
+                              if (isLate && hasLeave) {
+                                cls += ' att-cell--leave';
+                              } else if (isLate) {
+                                cls += ' att-cell--partial';
+                              } else {
+                                cls += ' att-cell--ok';
+                              }
                             } else if (hasLeave && isFullDay) {
                               cls += ' att-cell--leave';
                             } else if (hasLeave) {
@@ -421,7 +427,9 @@ export default function CheckinMonthDashboardClient() {
                             // Cell content
                             let content: React.ReactNode = '';
                             if (ci) {
-                              if (ci.late_minutes && ci.late_minutes > 0) {
+                              if (ci.late_minutes && ci.late_minutes > 0 && hasLeave) {
+                                content = leaveLabel;
+                              } else if (ci.late_minutes && ci.late_minutes > 0) {
                                 content = `遲${ci.late_minutes}`;
                               } else if (ci.clock_in) {
                                 content = ci.clock_in;
