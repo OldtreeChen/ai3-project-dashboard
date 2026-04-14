@@ -181,6 +181,7 @@ export async function GET(req: Request) {
       leave_early_minutes: number | null;
       punch_count: number;
     };
+    type LeaveEntry = { leave_type: string | null; leave_hours: number };
     type PersonRecord = {
       person_id: string;
       display_name: string;
@@ -188,6 +189,7 @@ export async function GET(req: Request) {
       days: Record<string, CiDay>;
       total_checkin_days: number;
       total_late_count: number;
+      leaves: Record<string, LeaveEntry[]>;
     };
 
     const personMap = new Map<string, PersonRecord>();
@@ -204,7 +206,8 @@ export async function GET(req: Request) {
           department_id: row.department_id ? String(row.department_id) : null,
           days: {},
           total_checkin_days: 0,
-          total_late_count: 0
+          total_late_count: 0,
+          leaves: {}
         });
       }
 
@@ -239,6 +242,63 @@ export async function GET(req: Request) {
       }
       seen.add(nameKey);
       people.push(p);
+    }
+
+    // Leave data query
+    let leaveSql = `
+      SELECT
+        u.${uId} AS person_id,
+        DATE(lp.\`FStartDate\`) AS leave_start_date,
+        DATE(lp.\`FEndDate\`) AS leave_end_date,
+        lp.\`FTotalHour\` AS total_hours,
+        lp.\`FLeaveType2\` AS leave_type
+      FROM ${U} u
+      JOIN \`TcLeavePermit\` lp ON lp.\`FUserId\` = u.${uId}
+      WHERE lp.\`FStartDate\` < ? AND lp.\`FEndDate\` >= ?
+        AND lp.\`FStatus\` IN ('Audited','ActPAudited','PAudited')
+        AND u.${uName} NOT LIKE ? AND u.${uName} NOT LIKE ?
+    `;
+    const leaveArgs: any[] = [month.end, month.start, '%MidECP-User%', '%service_user%'];
+    leaveSql += active.where;
+    leaveSql += wl.where;
+    leaveArgs.push(...wl.args);
+
+    try {
+      const leaveRows = await prisma.$queryRawUnsafe<any[]>(leaveSql, ...leaveArgs);
+      // Build per-person per-date leave map
+      const leaveMap = new Map<string, Map<string, { leave_type: string | null; leave_hours: number }[]>>();
+      for (const row of leaveRows) {
+        const pid = String(row.person_id || '');
+        if (!pid) continue;
+        const startStr = fmtDate(row.leave_start_date);
+        const endStr = fmtDate(row.leave_end_date);
+        if (!startStr || !endStr) continue;
+        const totalHours = Number(row.total_hours || 0);
+        const leaveType = row.leave_type ? String(row.leave_type).trim() : null;
+        if (!leaveMap.has(pid)) leaveMap.set(pid, new Map());
+        const personLeaves = leaveMap.get(pid)!;
+        const start = new Date(startStr + 'T00:00:00');
+        const end = new Date(endStr + 'T00:00:00');
+        for (const dateStr of allDays) {
+          const d = new Date(dateStr + 'T00:00:00');
+          if (d >= start && d <= end) {
+            if (!personLeaves.has(dateStr)) personLeaves.set(dateStr, []);
+            personLeaves.get(dateStr)!.push({ leave_type: leaveType, leave_hours: totalHours });
+          }
+        }
+      }
+      // Attach leaves to people (match by person_id, also try to match users not in checkin data)
+      for (const [pid, dayMap] of leaveMap.entries()) {
+        // Find existing person or skip (only show leave for people already in the list)
+        const person = people.find((p) => p.person_id === pid);
+        if (person) {
+          for (const [date, entries] of dayMap.entries()) {
+            person.leaves[date] = entries;
+          }
+        }
+      }
+    } catch {
+      // Leave data is optional — continue without it if query fails
     }
 
     // Compute totals
