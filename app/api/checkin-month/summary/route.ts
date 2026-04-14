@@ -309,7 +309,10 @@ export async function GET(req: Request) {
         const ci = p.days[date];
         if (ci) {
           checkinDays++;
-          if (ci.late_minutes != null && ci.late_minutes > 0) lateCount++;
+          if (ci.late_minutes != null && ci.late_minutes > 0) {
+            const hasLeaveToday = (p.leaves[date] || []).length > 0;
+            if (!hasLeaveToday) lateCount++;
+          }
         }
       }
       p.total_checkin_days = checkinDays;
