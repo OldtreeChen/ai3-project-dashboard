@@ -4,6 +4,8 @@ import { getTaskReceivedAtColumn } from '@/lib/taskReceivedAt';
 import { getTaskPlannedEndAtColumn } from '@/lib/taskPlannedEndAt';
 import { getTaskPlannedHoursColumn } from '@/lib/taskPlannedHours';
 import { getTaskPlannedStartAtColumn } from '@/lib/taskPlannedStartAt';
+import { getWorkdays as getTwWorkdays } from '@/lib/taiwanHolidays';
+import { countWeekdays, toDateStrSafe } from '@/lib/workdayUtils';
 
 export const dynamic = 'force-dynamic';
 
@@ -48,11 +50,9 @@ export async function GET(req: Request, ctx: { params: Promise<{ personId: strin
     const tId = sqlId(m.task.id);
     const tProjectId = sqlId(m.task.projectId);
     const tName = sqlId(m.task.name);
-    // 部門/人員任務：以「任務執行人」為準（不是任務下達人）
     const tAssigneeRaw = m.task.executorUserId || m.task.ownerUserId;
     const tAssignee = tAssigneeRaw ? sqlId(tAssigneeRaw) : null;
     const tPlanned = plannedHoursCol ? sqlId(plannedHoursCol) : (m.task.plannedHours ? sqlId(m.task.plannedHours) : null);
-    const tActual = m.task.actualHours ? sqlId(m.task.actualHours) : null;
     const tStatus = m.task.status ? sqlId(m.task.status) : null;
     const tReceivedAt = sqlId(receivedAtCol);
     const tPlannedEndAt = plannedEndCol ? sqlId(plannedEndCol) : null;
@@ -67,27 +67,22 @@ export async function GET(req: Request, ctx: { params: Promise<{ personId: strin
     const thWorkDate = m.timeReport?.workDate ? sqlId(m.timeReport.workDate) : null;
 
     if (!tAssignee) {
-      return Response.json(
-        { error: 'task.executorUserId/ownerUserId is not mapped; please set ecp.columns.task.executorUserId in config.json' },
-        { status: 500 }
-      );
+      return Response.json({ error: 'task.executorUserId/ownerUserId is not mapped' }, { status: 500 });
+    }
+    if (!(TH && trTimeReportId && thId && thWorkDate)) {
+      return Response.json({ error: 'timeReport mapping missing' }, { status: 500 });
     }
 
     const plannedExpr = tPlanned ? `COALESCE(t.${tPlanned}, 0)` : '0';
-
-    // Month allocation by overlap proportion (same as summary)
     const startExpr = tPlannedStartAt ? `COALESCE(t.${tPlannedStartAt}, t.${tReceivedAt})` : `t.${tReceivedAt}`;
     const endExpr = tPlannedEndAt ? `COALESCE(t.${tPlannedEndAt}, t.${tReceivedAt})` : `t.${tReceivedAt}`;
 
-    // executed hours from time logs (month-scoped)
     if (!(TH && trTimeReportId && thId && thWorkDate)) {
-      return Response.json({ error: 'timeReport/timeDetail mapping missing (need timeReportId + workDate)' }, { status: 500 });
+      return Response.json({ error: 'timeReport/timeDetail mapping missing' }, { status: 500 });
     }
     const usedSql = `
-      SELECT
-        tr.${trTaskId} AS task_id,
-        tr.${trUserId} AS person_id,
-        COALESCE(SUM(tr.${trHours}), 0) AS used_hours
+      SELECT tr.${trTaskId} AS task_id, tr.${trUserId} AS person_id,
+             COALESCE(SUM(tr.${trHours}), 0) AS used_hours
       FROM ${TR} tr
       LEFT JOIN ${TH} th ON th.${thId} = tr.${trTimeReportId}
       WHERE th.${thWorkDate} >= ? AND th.${thWorkDate} < ?
@@ -96,98 +91,89 @@ export async function GET(req: Request, ctx: { params: Promise<{ personId: strin
 
     const sql = `
       SELECT
-        ti.task_id,
-        ti.task_name,
-        ti.task_status,
-        ti.received_at,
-        ti.planned_hours,
-        ti.planned_end_at,
-        ti.completed_at,
+        t.${tId} AS task_id,
+        t.${tName} AS task_name,
+        ${tStatus ? `t.${tStatus} AS task_status,` : `NULL AS task_status,`}
+        t.${tReceivedAt} AS received_at,
+        ${plannedExpr} AS raw_planned_hours,
+        DATE(${startExpr}) AS plan_start,
+        DATE(${endExpr})   AS plan_end,
+        ${tPlannedEndAt ? `t.${tPlannedEndAt} AS planned_end_at,` : `NULL AS planned_end_at,`}
+        ${tCompletedAt ? `t.${tCompletedAt} AS completed_at,` : `NULL AS completed_at,`}
         COALESCE(us.used_hours, 0) AS used_hours,
-        (ti.planned_hours - COALESCE(us.used_hours, 0)) AS remaining_hours,
-        ti.project_id,
+        t.${tProjectId} AS project_id,
         ${pCode ? `p.${pCode} AS project_code,` : `NULL AS project_code,`}
         p.${pName} AS project_name
-      FROM (
-        SELECT
-          t.${tId} AS task_id,
-          t.${tName} AS task_name,
-          t.${tProjectId} AS project_id,
-          ${tStatus ? `t.${tStatus} AS task_status,` : `NULL AS task_status,`}
-          t.${tReceivedAt} AS received_at,
-          ${tPlannedEndAt ? `t.${tPlannedEndAt} AS planned_end_at,` : `NULL AS planned_end_at,`}
-          ${tCompletedAt ? `t.${tCompletedAt} AS completed_at,` : `NULL AS completed_at,`}
-          (
-            ${plannedExpr} *
-            GREATEST(
-              DATEDIFF(
-                LEAST(DATE(${endExpr}), DATE_SUB(DATE(?), INTERVAL 1 DAY)),
-                GREATEST(DATE(${startExpr}), DATE(?))
-              ) + 1,
-              0
-            ) /
-            GREATEST(DATEDIFF(DATE(${endExpr}), DATE(${startExpr})) + 1, 1)
-          ) AS planned_hours
-        FROM ${T} t
-        WHERE t.${tAssignee} = ?
-          ${tStatus ? `AND (t.${tStatus} IS NULL OR t.${tStatus} NOT IN ('Discarded','Cancel'))` : ''}
-          AND DATE(${startExpr}) < DATE(?)
-          AND DATE(${endExpr}) >= DATE(?)
-      ) ti
-      LEFT JOIN (
-        ${usedSql}
-      ) us ON us.task_id = ti.task_id AND us.person_id = ?
-      LEFT JOIN ${P} p ON p.${pId} = ti.project_id
-      WHERE p.${pName} NOT LIKE ?
-      ORDER BY ti.received_at DESC, ti.task_id DESC
+      FROM ${T} t
+      LEFT JOIN (${usedSql}) us ON us.task_id = t.${tId} AND us.person_id = ?
+      LEFT JOIN ${P} p ON p.${pId} = t.${tProjectId}
+      WHERE t.${tAssignee} = ?
+        ${tStatus ? `AND (t.${tStatus} IS NULL OR t.${tStatus} NOT IN ('Discarded','Cancel'))` : ''}
+        AND DATE(${startExpr}) < DATE(?)
+        AND DATE(${endExpr}) >= DATE(?)
+        AND p.${pName} NOT LIKE ?
+      ORDER BY t.${tReceivedAt} DESC, t.${tId} DESC
     `;
 
-    // args order must match SQL placeholders:
-    // 1-2: month end/start for overlap calc
-    // 3: personId
-    // 4-5: month end/start for overlap WHERE
-    // 6-7: used hours month filter (if enabled)
-    // last: personId for join
-    // placeholders:
-    // 1-2: planned overlap calc
-    // 3: personId
-    // 4-5: overlap WHERE
-    // 6-7: used hours month filter
-    // 8: personId for join
-    const args: any[] = [month.end, month.start, personId, month.end, month.start, month.start, month.end, personId, '%新人%'];
+    const args: any[] = [
+      month.start, month.end,  // used hours subquery
+      personId,                // us join
+      personId,                // WHERE assignee
+      month.end, month.start,  // overlap
+      '%新人%',               // project filter
+    ];
 
     const tasks = await prisma.$queryRawUnsafe<any[]>(sql, ...args);
 
-    // normalize numeric fields for JSON safety (SUM/expressions may come back as BigInt/Decimal)
-    const normalized = tasks.map((t) => ({
-      ...t,
-      planned_hours: Number(t.planned_hours || 0),
-      used_hours: Number(t.used_hours || 0),
-      remaining_hours: Number(t.remaining_hours || 0)
-    }));
+    // Workday-based proration in JS
+    const workdays = await getTwWorkdays(month.yyyy, month.mm);
+
+    const normalized = tasks.map((t) => {
+      const planStart = toDateStrSafe(t.plan_start);
+      const planEnd = toDateStrSafe(t.plan_end);
+      const rawHours = Number(t.raw_planned_hours || 0);
+      let planned_hours = 0;
+      if (planStart && planEnd) {
+        const taskWorkdays = countWeekdays(planStart, planEnd);
+        const monthWorkdaysInTask = workdays.filter((d) => d >= planStart && d <= planEnd).length;
+        planned_hours = rawHours * monthWorkdaysInTask / taskWorkdays;
+      }
+      const used = Number(t.used_hours || 0);
+      return {
+        task_id: t.task_id,
+        task_name: t.task_name,
+        task_status: t.task_status,
+        received_at: t.received_at,
+        planned_hours: Math.round(planned_hours * 10) / 10,
+        planned_end_at: t.planned_end_at,
+        completed_at: t.completed_at,
+        used_hours: Math.round(used * 10) / 10,
+        remaining_hours: Math.round((planned_hours - used) * 10) / 10,
+        project_id: t.project_id,
+        project_code: t.project_code,
+        project_name: t.project_name,
+      };
+    });
 
     return Response.json({
       personId,
       month: `${String(month.yyyy)}-${String(month.mm).padStart(2, '0')}`,
       date_range: { from: month.start, to_exclusive: month.end },
       received_at_column: { table: m.tables.task, column: receivedAtCol },
-      tasks: normalized
+      allocation: { method: 'overlap_workdays / total_workdays', unit: 'workdays' },
+      tasks: normalized,
     });
   } catch (err: any) {
-    const message = err?.message ? String(err.message) : 'unknown error';
     return Response.json(
       {
         ok: false,
-        error: message,
+        error: err?.message ? String(err.message) : 'unknown error',
         hint: [
           '通常是「接收日期欄位」偵測不到，或 ecp.columns 對應需要在 config.json 明確指定。',
-          '你可以先開 /schema 查 TcTask 的日期欄位，再把 receivedAt 寫進 config.json：',
           '{ "ecp": { "columns": { "task": { "receivedAt": "FFirstCommitmentDate" }}}}'
-        ]
+        ],
       },
       { status: 500 }
     );
   }
 }
-
-
