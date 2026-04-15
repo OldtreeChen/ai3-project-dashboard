@@ -7,6 +7,7 @@ import { getTaskPlannedStartAtColumn } from '@/lib/taskPlannedStartAt';
 import { getUserActiveFilter } from '@/lib/userActive';
 import { buildWhitelistWhere, getAiDeptIds } from '@/lib/aiPeopleWhitelist';
 import { getWorkdays as getTwWorkdays, getHolidayMap } from '@/lib/taiwanHolidays';
+import { countWeekdays } from '@/lib/workdayUtils';
 import { parseIdParam } from '../../_utils';
 
 export const dynamic = 'force-dynamic';
@@ -40,22 +41,6 @@ function toDateStr(v: unknown): string | null {
   return /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(0, 10) : null;
 }
 
-/** Count Mon–Fri days in [start, end] inclusive (O(1), no holiday lookup) */
-function countWeekdays(startStr: string, endStr: string): number {
-  const start = new Date(startStr + 'T00:00:00');
-  const end = new Date(endStr + 'T00:00:00');
-  if (end < start) return 1; // at least 1 to avoid div-by-zero
-  const totalDays = Math.round((end.getTime() - start.getTime()) / 86400000) + 1;
-  const fullWeeks = Math.floor(totalDays / 7);
-  const remaining = totalDays % 7;
-  const startDow = start.getDay();
-  let weekdays = fullWeeks * 5;
-  for (let i = 0; i < remaining; i++) {
-    const dow = (startDow + i) % 7;
-    if (dow !== 0 && dow !== 6) weekdays++;
-  }
-  return Math.max(weekdays, 1);
-}
 
 export async function GET(req: Request) {
   try {
