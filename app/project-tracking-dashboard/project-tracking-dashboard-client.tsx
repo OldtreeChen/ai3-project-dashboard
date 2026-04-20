@@ -51,11 +51,15 @@ type MonthMilestone = {
   }[];
 };
 
+type MilestoneStats = { total: number; finished: number; rate: number };
+
 type MonthMilestonesData = {
   month: string;
   date_range: { from: string; to_exclusive: string };
   goLive: MonthMilestone[];
   acceptance: MonthMilestone[];
+  goLiveStats: MilestoneStats;
+  acceptanceStats: MilestoneStats;
 };
 
 type Dept = { id: string; name: string };
@@ -144,6 +148,41 @@ function DateCell({ ms }: { ms: MonthMilestone }) {
   );
 }
 
+/** Milestone status badge */
+function MsStatusBadge({ status }: { status: string | null }) {
+  const s = status ?? '';
+  let cls = 'mm-status';
+  if (s === 'Finished') cls += ' mm-status--done';
+  else if (s === 'Overdue' || s === 'OverdueUpgrade' || s === 'AutoUpgrade') cls += ' mm-status--overdue';
+  else if (s === 'Executing' || s === 'Assigned') cls += ' mm-status--active';
+  else cls += ' mm-status--idle';
+  const label = {
+    Finished: '已完成',
+    Executing: '執行中',
+    Overdue: '已逾期',
+    OverdueUpgrade: '逾期升級',
+    AutoUpgrade: '自動升級',
+    Assigned: '已分配',
+    New: '待開始',
+  }[s] ?? (s || '--');
+  return <span className={cls}>{label}</span>;
+}
+
+/** Completion progress bar */
+function CompletionBar({ stats }: { stats: MilestoneStats }) {
+  const { total, finished, rate } = stats;
+  return (
+    <div className="mm-rate">
+      <div className="mm-rate__bar">
+        <div className="mm-rate__fill" style={{ width: `${rate}%` }} />
+      </div>
+      <span className="mm-rate__text">
+        {finished}/{total} 完成 <strong>{rate}%</strong>
+      </span>
+    </div>
+  );
+}
+
 /** Truncate project name: strip prefix like 【AI】 and suffix like _PM/_SE */
 function shortProjName(name: string): string {
   return name
@@ -155,23 +194,37 @@ function shortProjName(name: string): string {
 function MonthMilestoneCard({
   title,
   items,
+  stats,
   variant,
 }: {
   title: string;
   items: MonthMilestone[];
+  stats: MilestoneStats;
   variant: 'golive' | 'acceptance';
 }) {
   const changedCount = items.filter((m) => m.date_changed_from && m.date_changed_from !== m.plan_date).length;
+
+  // Sort: finished at bottom, then by plan_date asc
+  const sorted = [...items].sort((a, b) => {
+    const aF = a.ms_status === 'Finished' ? 1 : 0;
+    const bF = b.ms_status === 'Finished' ? 1 : 0;
+    if (aF !== bF) return aF - bF;
+    return (a.plan_date ?? '').localeCompare(b.plan_date ?? '');
+  });
+
   return (
     <div className="mm-card">
       <div className="mm-card__header">
-        <h2 className={`mm-card__title mm-card__title--${variant}`}>
-          {title}
-          <span className={`mm-badge mm-badge--${variant}`}>{items.length} 個</span>
-          {changedCount > 0 && (
-            <span className="mm-badge mm-badge--changed">⚡ {changedCount} 項本月變更</span>
-          )}
-        </h2>
+        <div style={{ flex: 1 }}>
+          <h2 className={`mm-card__title mm-card__title--${variant}`}>
+            {title}
+            <span className={`mm-badge mm-badge--${variant}`}>{items.length} 個</span>
+            {changedCount > 0 && (
+              <span className="mm-badge mm-badge--changed">⚡ {changedCount} 項本月變更</span>
+            )}
+          </h2>
+          <CompletionBar stats={stats} />
+        </div>
       </div>
       {!items.length ? (
         <div className="mm-empty">本月尚無此類里程碑</div>
@@ -179,6 +232,7 @@ function MonthMilestoneCard({
         <table className="mm-table">
           <thead>
             <tr>
+              <th className="mm-col--status-sm">狀態</th>
               <th className="mm-col--name">里程碑</th>
               <th className="mm-col--proj">專案</th>
               <th className="mm-col--date">計畫日期</th>
@@ -186,10 +240,17 @@ function MonthMilestoneCard({
             </tr>
           </thead>
           <tbody>
-            {items.map((ms) => {
+            {sorted.map((ms) => {
               const hasChange = ms.date_changed_from && ms.date_changed_from !== ms.plan_date;
+              const isDone = ms.ms_status === 'Finished';
               return (
-                <tr key={ms.id} className={hasChange ? 'mm-row--changed' : ''}>
+                <tr
+                  key={ms.id}
+                  className={isDone ? 'mm-row--done' : hasChange ? 'mm-row--changed' : ''}
+                >
+                  <td className="mm-col--status-sm">
+                    <MsStatusBadge status={ms.ms_status} />
+                  </td>
                   <td className="mm-col--name" title={ms.milestone_name}>
                     {ms.milestone_name}
                   </td>
@@ -197,7 +258,11 @@ function MonthMilestoneCard({
                     {shortProjName(ms.project_name)}
                   </td>
                   <td className="mm-col--date">
-                    <DateCell ms={ms} />
+                    {isDone ? (
+                      <span style={{ color: 'var(--muted)', fontSize: 12 }}>{ms.plan_date || '--'}</span>
+                    ) : (
+                      <DateCell ms={ms} />
+                    )}
                   </td>
                   <td className="mm-col--owner">{ms.owner_name || '--'}</td>
                 </tr>
@@ -301,11 +366,13 @@ export default function ProjectTrackingDashboardClient() {
               <MonthMilestoneCard
                 title="預計上線"
                 items={monthData.goLive}
+                stats={monthData.goLiveStats}
                 variant="golive"
               />
               <MonthMilestoneCard
                 title="預計驗收"
                 items={monthData.acceptance}
+                stats={monthData.acceptanceStats}
                 variant="acceptance"
               />
             </div>

@@ -6,7 +6,7 @@ import { parseIdParam } from '@/app/api/_utils';
 
 export const dynamic = 'force-dynamic';
 
-const ACTIVE_STATUSES = `'Assigned','New','Executing','ExecuteAuditing','ExecuteBack','Overdue','OverdueUpgrade','AutoUpgrade'`;
+const ACTIVE_STATUSES = `'Assigned','New','Executing','ExecuteAuditing','ExecuteBack','Overdue','OverdueUpgrade','AutoUpgrade','Finished'`;
 
 function getMonthRange(monthParam?: string | null) {
   let yyyy: number, mm: number;
@@ -92,7 +92,7 @@ export async function GET(req: Request) {
       ${ownerDeptJoin}
       WHERE (ms.FName LIKE '%上線%' OR ms.FName LIKE '%驗收%')
         AND ms.FFinishDate >= ? AND ms.FFinishDate < ?
-        AND (ms.FStatus IS NULL OR ms.FStatus NOT IN ('Finished','Cancel','Discarded'))
+        AND (ms.FStatus IS NULL OR ms.FStatus NOT IN ('Cancel','Discarded'))
         AND p.${pName} NOT LIKE '%新人%'
         AND (p.${pName} LIKE '【AI】%' OR p.${pName} LIKE 'AI】%')
         AND p.${pStatus} IN (${ACTIVE_STATUSES})
@@ -191,11 +191,20 @@ export async function GET(req: Request) {
       }
     }
 
+    const calcRate = (items: any[]) => {
+      const total = items.length;
+      const finished = items.filter((x) => x.ms_status === 'Finished').length;
+      const rate = total > 0 ? Math.round((finished / total) * 100) : 0;
+      return { total, finished, rate };
+    };
+
     return Response.json({
       month: month.label,
       date_range: { from: month.start, to_exclusive: month.end },
       goLive,
       acceptance,
+      goLiveStats: calcRate(goLive),
+      acceptanceStats: calcRate(acceptance),
     });
   } catch (err: any) {
     const message = err?.message ? String(err.message) : 'unknown error';
