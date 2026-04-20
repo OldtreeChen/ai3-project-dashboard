@@ -31,6 +31,33 @@ type SummaryData = {
   upcomingMilestones: MilestoneRow[];
 };
 
+type MonthMilestone = {
+  id: string;
+  milestone_name: string;
+  project_id: string;
+  project_name: string;
+  project_status: string | null;
+  plan_date: string | null;
+  ms_status: string | null;
+  owner_name: string | null;
+  dept_name: string | null;
+  date_changed_from: string | null;
+  changes: {
+    old_date: string;
+    new_date: string | null;
+    changed_at: string;
+    reason: string | null;
+    delay_type: string | null;
+  }[];
+};
+
+type MonthMilestonesData = {
+  month: string;
+  date_range: { from: string; to_exclusive: string };
+  goLive: MonthMilestone[];
+  acceptance: MonthMilestone[];
+};
+
 type Dept = { id: string; name: string };
 
 function Badge({ count, variant }: { count: number; variant: 'overdue' | 'upcoming' }) {
@@ -103,8 +130,89 @@ function MilestoneTable({ rows, highlightOverdue }: { rows: MilestoneRow[]; high
   );
 }
 
+/** Date display — if changed this month, show ~~old~~ → new */
+function DateCell({ ms }: { ms: MonthMilestone }) {
+  if (!ms.date_changed_from || ms.date_changed_from === ms.plan_date) {
+    return <span>{ms.plan_date || '--'}</span>;
+  }
+  return (
+    <span className="mm-date-change" title={ms.changes.map((c) => `${c.changed_at}${c.reason ? `：${c.reason}` : ''}`).join('\n')}>
+      <span className="mm-date--old">{ms.date_changed_from}</span>
+      <span className="mm-date--arrow">→</span>
+      <span className="mm-date--new">{ms.plan_date || '--'}</span>
+    </span>
+  );
+}
+
+/** Truncate project name: strip prefix like 【AI】 and suffix like _PM/_SE */
+function shortProjName(name: string): string {
+  return name
+    .replace(/^【[^】]*】/, '')
+    .replace(/_(?:PM|SE|雲服|雲租)$/, '')
+    .trim();
+}
+
+function MonthMilestoneCard({
+  title,
+  items,
+  variant,
+}: {
+  title: string;
+  items: MonthMilestone[];
+  variant: 'golive' | 'acceptance';
+}) {
+  const changedCount = items.filter((m) => m.date_changed_from && m.date_changed_from !== m.plan_date).length;
+  return (
+    <div className="mm-card">
+      <div className="mm-card__header">
+        <h2 className={`mm-card__title mm-card__title--${variant}`}>
+          {title}
+          <span className={`mm-badge mm-badge--${variant}`}>{items.length} 個</span>
+          {changedCount > 0 && (
+            <span className="mm-badge mm-badge--changed">⚡ {changedCount} 項本月變更</span>
+          )}
+        </h2>
+      </div>
+      {!items.length ? (
+        <div className="mm-empty">本月尚無此類里程碑</div>
+      ) : (
+        <table className="mm-table">
+          <thead>
+            <tr>
+              <th className="mm-col--name">里程碑</th>
+              <th className="mm-col--proj">專案</th>
+              <th className="mm-col--date">計畫日期</th>
+              <th className="mm-col--owner">負責人</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((ms) => {
+              const hasChange = ms.date_changed_from && ms.date_changed_from !== ms.plan_date;
+              return (
+                <tr key={ms.id} className={hasChange ? 'mm-row--changed' : ''}>
+                  <td className="mm-col--name" title={ms.milestone_name}>
+                    {ms.milestone_name}
+                  </td>
+                  <td className="mm-col--proj" title={ms.project_name}>
+                    {shortProjName(ms.project_name)}
+                  </td>
+                  <td className="mm-col--date">
+                    <DateCell ms={ms} />
+                  </td>
+                  <td className="mm-col--owner">{ms.owner_name || '--'}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
 export default function ProjectTrackingDashboardClient() {
   const [data, setData] = useState<SummaryData | null>(null);
+  const [monthData, setMonthData] = useState<MonthMilestonesData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [depts, setDepts] = useState<Dept[]>([]);
@@ -117,12 +225,18 @@ export default function ProjectTrackingDashboardClient() {
       const params = new URLSearchParams();
       if (deptId) params.set('departmentId', deptId);
       const q = params.toString() ? `?${params}` : '';
-      const res = await fetch(`/api/project-tracking/summary${q}`);
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err?.error || `HTTP ${res.status}`);
+
+      const [summaryRes, monthRes] = await Promise.all([
+        fetch(`/api/project-tracking/summary${q}`),
+        fetch(`/api/project-tracking/month-milestones${q}`),
+      ]);
+
+      if (!summaryRes.ok) {
+        const err = await summaryRes.json().catch(() => ({}));
+        throw new Error(err?.error || `HTTP ${summaryRes.status}`);
       }
-      setData(await res.json());
+      setData(await summaryRes.json());
+      if (monthRes.ok) setMonthData(await monthRes.json());
     } catch (e: any) {
       setError(e?.message ?? '載入失敗');
     } finally {
@@ -149,7 +263,7 @@ export default function ProjectTrackingDashboardClient() {
       <header className="topbar">
         <div className="brand">
           <div className="brand__title">專案追蹤</div>
-          <div className="brand__sub">已逾期與近 7 天到期的專案及里程碑</div>
+          <div className="brand__sub">本月上線/驗收里程碑，及逾期與近 7 天到期的專案與里程碑</div>
           <TopMenu />
         </div>
       </header>
@@ -171,6 +285,32 @@ export default function ProjectTrackingDashboardClient() {
 
         {loading && <div className="sr-loading">載入中…</div>}
         {error && <div className="sr-error">錯誤：{error}</div>}
+
+        {/* ── 本月上線 / 驗收里程碑 ── */}
+        {monthData && (
+          <section style={{ marginBottom: 24 }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 12 }}>
+              <h2 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>
+                本月里程碑（{monthData.month}）
+              </h2>
+              <span style={{ fontSize: 12, color: 'var(--muted)' }}>
+                依里程碑名稱含「上線」或「驗收」篩選；⚡ 表示本月有日期變更
+              </span>
+            </div>
+            <div className="mm-grid">
+              <MonthMilestoneCard
+                title="預計上線"
+                items={monthData.goLive}
+                variant="golive"
+              />
+              <MonthMilestoneCard
+                title="預計驗收"
+                items={monthData.acceptance}
+                variant="acceptance"
+              />
+            </div>
+          </section>
+        )}
 
         {data && (
           <>

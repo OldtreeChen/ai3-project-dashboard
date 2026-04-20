@@ -1012,6 +1012,102 @@ body{
 .ps-row--total td{ border-top: 2px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.04); }
 .milestone-date--overdue{ color: var(--bad); }
 
+/* ── Month Milestones (本月上線/驗收) ── */
+.mm-grid{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+@media (max-width: 900px){ .mm-grid{ grid-template-columns: 1fr; } }
+
+.mm-card{
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.mm-card__header{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 18px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.mm-card__title{
+  font-size: 15px;
+  font-weight: 700;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.mm-card__title--golive{ color: #34d399; }
+.mm-card__title--acceptance{ color: #a78bfa; }
+.mm-badge{
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid;
+}
+.mm-badge--golive{ border-color: rgba(52,211,153,0.4); color: rgba(52,211,153,0.9); }
+.mm-badge--acceptance{ border-color: rgba(167,139,250,0.4); color: rgba(167,139,250,0.9); }
+.mm-badge--changed{
+  background: rgba(251,191,36,0.15);
+  border-color: rgba(251,191,36,0.45);
+  color: rgba(251,191,36,0.95);
+  font-size: 11px;
+  padding: 1px 6px;
+}
+.mm-empty{ color: var(--muted); font-size: 13px; padding: 16px 18px; }
+.mm-table{
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.mm-table th{
+  padding: 7px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.mm-table td{
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  vertical-align: middle;
+}
+.mm-table tr:last-child td{ border-bottom: none; }
+.mm-table tr:hover td{ background: rgba(255,255,255,0.025); }
+.mm-col--name{ min-width: 100px; max-width: 220px; }
+.mm-col--proj{ min-width: 140px; max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mm-col--date{ min-width: 90px; white-space: nowrap; }
+.mm-col--owner{ min-width: 60px; white-space: nowrap; color: var(--muted); }
+
+/* Date change highlight */
+.mm-date-change{
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+.mm-date--old{
+  text-decoration: line-through;
+  color: rgba(251,113,133,0.85);
+  font-size: 11px;
+}
+.mm-date--arrow{ color: var(--muted); font-size: 11px; }
+.mm-date--new{
+  font-weight: 700;
+  color: #fbbf24;
+}
+.mm-row--changed td{ background: rgba(251,191,36,0.04); }
+
 /* Wider content area */
 .content--wide{
   max-width: none;
