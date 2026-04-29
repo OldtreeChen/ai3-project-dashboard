@@ -100,9 +100,9 @@ export default function DeptPersonMonthDashboardClient() {
   const [tasksError, setTasksError] = useState('');
   const [tasks, setTasks] = useState<TaskRow[]>([]);
 
-  // 每月應完成工時：上班日 * 8 小時 * 0.8
+  // 每月應完成工時：上班日 * 8 小時（100%）
   const [workdayCount, setWorkdayCount] = useState(0);
-  const expectedHours = useMemo(() => workdayCount * 8 * 0.8, [workdayCount]);
+  const expectedHours = useMemo(() => workdayCount * 8, [workdayCount]);
 
   const totals = useMemo(() => {
     const peopleCount = rows.length;
