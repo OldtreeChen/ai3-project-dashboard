@@ -4,6 +4,24 @@ import { useCallback, useEffect, useState } from 'react';
 import TopMenu from '../_components/TopMenu';
 import { toZhStatus } from '@/lib/statusText';
 
+function toMonthValue(d = new Date()) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function monthLabel(m: string) {
+  // "2026-04" → "2026 年 4 月"
+  const [y, mo] = m.split('-');
+  return `${y} 年 ${Number(mo)} 月`;
+}
+
+function shiftMonth(m: string, delta: number): string {
+  const [y, mo] = m.split('-').map(Number);
+  const d = new Date(y, mo - 1 + delta, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+const NOW_MONTH = toMonthValue();
+
 type ProjectRow = {
   id: string;
   name: string;
@@ -278,34 +296,44 @@ function MonthMilestoneCard({
 export default function ProjectTrackingDashboardClient() {
   const [data, setData] = useState<SummaryData | null>(null);
   const [monthData, setMonthData] = useState<MonthMilestonesData | null>(null);
+  const [monthLoading, setMonthLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [depts, setDepts] = useState<Dept[]>([]);
   const [selectedDeptId, setSelectedDeptId] = useState<string | null>(null);
+  const [selectedMonth, setSelectedMonth] = useState<string>(NOW_MONTH);
 
-  const fetchData = useCallback(async (deptId: string | null) => {
+  // Fetch summary (overdue / upcoming) — does NOT depend on selectedMonth
+  const fetchSummary = useCallback(async (deptId: string | null) => {
     setLoading(true);
     setError(null);
     try {
       const params = new URLSearchParams();
       if (deptId) params.set('departmentId', deptId);
       const q = params.toString() ? `?${params}` : '';
-
-      const [summaryRes, monthRes] = await Promise.all([
-        fetch(`/api/project-tracking/summary${q}`),
-        fetch(`/api/project-tracking/month-milestones${q}`),
-      ]);
-
-      if (!summaryRes.ok) {
-        const err = await summaryRes.json().catch(() => ({}));
-        throw new Error(err?.error || `HTTP ${summaryRes.status}`);
+      const res = await fetch(`/api/project-tracking/summary${q}`);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error || `HTTP ${res.status}`);
       }
-      setData(await summaryRes.json());
-      if (monthRes.ok) setMonthData(await monthRes.json());
+      setData(await res.json());
     } catch (e: any) {
       setError(e?.message ?? '載入失敗');
     } finally {
       setLoading(false);
+    }
+  }, []);
+
+  // Fetch month milestones — depends on selectedMonth + deptId
+  const fetchMonthData = useCallback(async (deptId: string | null, month: string) => {
+    setMonthLoading(true);
+    try {
+      const params = new URLSearchParams({ month });
+      if (deptId) params.set('departmentId', deptId);
+      const res = await fetch(`/api/project-tracking/month-milestones?${params}`);
+      if (res.ok) setMonthData(await res.json());
+    } catch { /* ignore */ } finally {
+      setMonthLoading(false);
     }
   }, []);
 
@@ -319,9 +347,14 @@ export default function ProjectTrackingDashboardClient() {
     })();
   }, []);
 
-  useEffect(() => { fetchData(selectedDeptId); }, [fetchData, selectedDeptId]);
+  useEffect(() => { fetchSummary(selectedDeptId); }, [fetchSummary, selectedDeptId]);
+  useEffect(() => { fetchMonthData(selectedDeptId, selectedMonth); }, [fetchMonthData, selectedDeptId, selectedMonth]);
 
   const selectDept = (id: string | null) => { setSelectedDeptId(id); };
+
+  const prevMonth = () => setSelectedMonth((m) => shiftMonth(m, -1));
+  const nextMonth = () => setSelectedMonth((m) => shiftMonth(m, 1));
+  const goToday = () => setSelectedMonth(NOW_MONTH);
 
   return (
     <div className="app">
@@ -351,17 +384,34 @@ export default function ProjectTrackingDashboardClient() {
         {loading && <div className="sr-loading">載入中…</div>}
         {error && <div className="sr-error">錯誤：{error}</div>}
 
-        {/* ── 本月上線 / 驗收里程碑 ── */}
-        {monthData && (
-          <section style={{ marginBottom: 24 }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 12 }}>
-              <h2 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>
-                本月里程碑（{monthData.month}）
-              </h2>
-              <span style={{ fontSize: 12, color: 'var(--muted)' }}>
-                依里程碑名稱含「上線」或「驗收」篩選；⚡ 表示本月有日期變更
-              </span>
-            </div>
+        {/* ── 上線 / 驗收里程碑（可切換月份）── */}
+        <section style={{ marginBottom: 24 }}>
+          {/* 月份導覽列 */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
+            <button className="btn" style={{ padding: '0 10px', height: 30, fontSize: 16 }} onClick={prevMonth}>‹</button>
+            <span style={{ fontWeight: 700, fontSize: 15, minWidth: 110, textAlign: 'center' }}>
+              {monthLabel(selectedMonth)}
+            </span>
+            <button className="btn" style={{ padding: '0 10px', height: 30, fontSize: 16 }} onClick={nextMonth}>›</button>
+            {selectedMonth !== NOW_MONTH && (
+              <button className="btn" style={{ height: 30, fontSize: 12, padding: '0 10px' }} onClick={goToday}>
+                回本月
+              </button>
+            )}
+            <input
+              type="month"
+              className="field__control"
+              style={{ height: 30, fontSize: 12, padding: '0 8px' }}
+              value={selectedMonth}
+              onChange={(e) => e.target.value && setSelectedMonth(e.target.value)}
+            />
+            {monthLoading && <span style={{ fontSize: 12, color: 'var(--muted)' }}>載入中…</span>}
+            <span style={{ fontSize: 12, color: 'var(--muted)', marginLeft: 4 }}>
+              依里程碑名稱含「上線」或「驗收」篩選；⚡ 表示當月有日期變更
+            </span>
+          </div>
+
+          {monthData ? (
             <div className="mm-grid">
               <MonthMilestoneCard
                 title="預計上線"
@@ -376,8 +426,10 @@ export default function ProjectTrackingDashboardClient() {
                 variant="acceptance"
               />
             </div>
-          </section>
-        )}
+          ) : (
+            !monthLoading && <div className="sr-empty">尚無資料</div>
+          )}
+        </section>
 
         {data && (
           <>
