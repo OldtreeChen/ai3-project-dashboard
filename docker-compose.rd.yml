@@ -10,7 +10,7 @@ services:
       - GITLAB_URL=${GITLAB_URL}
       - GITLAB_TOKEN=${GITLAB_TOKEN}
       - ALLOWED_DEPTS=AI產品研發部
-      - PROJECT_DEPT_KEYWORDS=AI產品研發部,AI研究中心
+      - PROJECT_DEPT_KEYWORDS=AI產品研發部
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:5183/api/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
