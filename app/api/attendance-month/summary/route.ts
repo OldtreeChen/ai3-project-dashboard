@@ -115,7 +115,7 @@ export async function GET(req: Request) {
     const active = await getUserActiveFilter(m.tables.user, 'u');
     sql += active.where;
 
-    const { dept1Id, dept2Id } = await getAiDeptIds();
+    const { dept1Id, dept2Id, allDeptIds } = await getAiDeptIds();
     const wl = buildWhitelistWhere({
       uName: String(uName),
       uDeptId: uDeptId ? String(uDeptId) : null,
@@ -123,6 +123,7 @@ export async function GET(req: Request) {
       departmentId: departmentId || null,
       dept1Id,
       dept2Id,
+      allDeptIds,
       scope: 'attendance',
     });
     sql += wl.where;
