@@ -95,7 +95,7 @@ export async function GET(req: Request) {
         AND ms.FFinishDate >= ? AND ms.FFinishDate < ?
         AND (ms.FStatus IS NULL OR ms.FStatus NOT IN ('Cancel','Discarded'))
         AND p.${pName} NOT LIKE '%新人%'
-        AND (p.${pName} LIKE '【AI】%' OR p.${pName} LIKE 'AI】%')
+        ${process.env.PROJECT_DEPT_KEYWORDS ? '' : `AND (p.${pName} LIKE '【AI】%' OR p.${pName} LIKE 'AI】%')`}
         AND p.${pStatus} IN (${ACTIVE_STATUSES})
         ${projectDeptFilter}
         ${deptFilter}

@@ -59,9 +59,14 @@ export async function GET(req: Request) {
     const deptFilter = departmentId && pDeptId ? `AND p.${pDeptId} = ?` : '';
     const deptArgs: string[] = departmentId && pDeptId ? [departmentId] : [];
 
+    // When PROJECT_DEPT_KEYWORDS is set, the dept filter is precise enough;
+    // skip the 【AI】 prefix requirement so non-prefixed projects are included.
+    const nameFilter = process.env.PROJECT_DEPT_KEYWORDS
+      ? `p.${pName} NOT LIKE '%新人%'`
+      : `p.${pName} NOT LIKE '%新人%' AND (p.${pName} LIKE '【AI】%' OR p.${pName} LIKE 'AI】%')`;
+
     const baseNameFilter = `
-      p.${pName} NOT LIKE '%新人%'
-      AND (p.${pName} LIKE '【AI】%' OR p.${pName} LIKE 'AI】%')
+      ${nameFilter}
       ${projectDeptFilter}
       ${deptFilter}
     `;
