@@ -50,6 +50,8 @@ export const EXCLUDED_USERS: ExcludedUser[] = [
   { name: '廖明信', dept: 'dept1' },  // 專案一部排除，二部保留
   { name: '鄭翔之', dept: 'dept1' },  // 專案一部排除
   { name: '高仲揚', dept: 'dept1' },  // 專案一部排除
+  // 研發部排除
+  { name: '姚晉民' },
 ];
 
 /**
