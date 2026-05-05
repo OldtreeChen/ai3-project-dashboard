@@ -3,6 +3,7 @@ import { getEcpMapping, sqlId } from '@/lib/ecpSchema';
 import { getProjectOwnerColumn } from '@/lib/projectOwner';
 import { getUserActiveFilter } from '@/lib/userActive';
 import { parseIdParam } from '@/app/api/_utils';
+import { getProjectDeptFilter } from '@/lib/projectDeptFilter';
 
 export const dynamic = 'force-dynamic';
 
@@ -48,7 +49,7 @@ export async function GET(req: Request) {
     const projectDeptJoin = D && dId && dName && pDeptId
       ? `LEFT JOIN ${D} dp ON dp.${dId} = p.${pDeptId}` : '';
     const projectDeptFilter = D && dId && dName && pDeptId
-      ? `AND (dp.${dName} LIKE '%AI專案一部%' OR dp.${dName} LIKE '%AI專案二部%')` : '';
+      ? getProjectDeptFilter(`dp.${dName}`) : '';
     const ownerJoin = pOwner
       ? `LEFT JOIN ${U} u ON u.${uId} = p.${pOwner}` : '';
     const ownerDeptJoin = D && dId && dName && uDeptId
