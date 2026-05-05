@@ -4,8 +4,7 @@ import { getTaskReceivedAtColumn } from '@/lib/taskReceivedAt';
 import { getTaskPlannedEndAtColumn } from '@/lib/taskPlannedEndAt';
 import { getTaskPlannedHoursColumn } from '@/lib/taskPlannedHours';
 import { getTaskPlannedStartAtColumn } from '@/lib/taskPlannedStartAt';
-import { getWorkdays as getTwWorkdays } from '@/lib/taiwanHolidays';
-import { countWeekdays, toDateStrSafe } from '@/lib/workdayUtils';
+import { calDaysTotal, calDaysInMonth, toDateStrSafe } from '@/lib/workdayUtils';
 
 export const dynamic = 'force-dynamic';
 
@@ -125,18 +124,16 @@ export async function GET(req: Request, ctx: { params: Promise<{ personId: strin
 
     const tasks = await prisma.$queryRawUnsafe<any[]>(sql, ...args);
 
-    // Workday-based proration in JS
-    const workdays = await getTwWorkdays(month.yyyy, month.mm);
-
+    // Calendar-day proration in JS
     const normalized = tasks.map((t) => {
       const planStart = toDateStrSafe(t.plan_start);
       const planEnd = toDateStrSafe(t.plan_end);
       const rawHours = Number(t.raw_planned_hours || 0);
       let planned_hours = 0;
       if (planStart && planEnd) {
-        const taskWorkdays = countWeekdays(planStart, planEnd);
-        const monthWorkdaysInTask = workdays.filter((d) => d >= planStart && d <= planEnd).length;
-        planned_hours = rawHours * monthWorkdaysInTask / taskWorkdays;
+        const taskTotalDays = calDaysTotal(planStart, planEnd);
+        const overlapDays = calDaysInMonth(planStart, planEnd, month.start, month.end);
+        planned_hours = rawHours * overlapDays / taskTotalDays;
       }
       const used = Number(t.used_hours || 0);
       return {
@@ -160,7 +157,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ personId: strin
       month: `${String(month.yyyy)}-${String(month.mm).padStart(2, '0')}`,
       date_range: { from: month.start, to_exclusive: month.end },
       received_at_column: { table: m.tables.task, column: receivedAtCol },
-      allocation: { method: 'overlap_workdays / total_workdays', unit: 'workdays' },
+      allocation: { method: 'overlap_calendar_days / total_calendar_days', unit: 'days' },
       tasks: normalized,
     });
   } catch (err: any) {

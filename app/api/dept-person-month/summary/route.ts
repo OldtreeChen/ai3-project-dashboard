@@ -7,7 +7,7 @@ import { getTaskPlannedEndAtColumn } from '@/lib/taskPlannedEndAt';
 import { getTaskPlannedStartAtColumn } from '@/lib/taskPlannedStartAt';
 import { buildWhitelistWhere, getAiDeptIds } from '@/lib/aiPeopleWhitelist';
 import { getWorkdays as getTwWorkdays } from '@/lib/taiwanHolidays';
-import { countWeekdays, toDateStrSafe } from '@/lib/workdayUtils';
+import { calDaysTotal, calDaysInMonth, toDateStrSafe } from '@/lib/workdayUtils';
 import { parseIdParam } from '../../_utils';
 
 export const dynamic = 'force-dynamic';
@@ -191,9 +191,9 @@ export async function GET(req: Request) {
         const planStart = toDateStrSafe(row.plan_start);
         const planEnd = toDateStrSafe(row.plan_end);
         if (planStart && planEnd) {
-          const taskWorkdays = countWeekdays(planStart, planEnd);
-          const monthWorkdaysInTask = workdays.filter((d) => d >= planStart && d <= planEnd).length;
-          const allocatedHours = Number(row.raw_planned_hours || 0) * monthWorkdaysInTask / taskWorkdays;
+          const taskTotalDays = calDaysTotal(planStart, planEnd);
+          const overlapDays = calDaysInMonth(planStart, planEnd, month.start, month.end);
+          const allocatedHours = Number(row.raw_planned_hours || 0) * overlapDays / taskTotalDays;
           p.task_count++;
           p.received_total_hours += allocatedHours;
         }
@@ -235,7 +235,7 @@ export async function GET(req: Request) {
       planned_hours_column: { table: m.tables.task, column: plannedHoursCol },
       planned_start_column: { table: m.tables.task, column: plannedStartCol },
       planned_end_column: { table: m.tables.task, column: plannedEndCol },
-      allocation: { method: 'overlap_workdays / total_workdays', unit: 'workdays', note: '接收總時數=該月任務預估（工作日均攤）' },
+      allocation: { method: 'overlap_calendar_days / total_calendar_days', unit: 'days', note: '接收總時數=該月任務預估（日曆天均攤）' },
       filters: { departmentId: departmentId || null, personId: personId || null },
       people,
     });
