@@ -39,7 +39,7 @@ export async function GET(req: Request) {
     const deptId = url.searchParams.get('deptId') || null;
 
     const m = await getEcpMapping();
-    const { dept1Id, dept2Id } = await getAiDeptIds();
+    const { dept1Id, dept2Id, allDeptIds } = await getAiDeptIds();
     const plannedEndCol = await getTaskPlannedEndAtColumn();
 
     const T = sqlId(m.tables.task);
@@ -76,6 +76,7 @@ export async function GET(req: Request) {
       departmentId: deptId,
       dept1Id,
       dept2Id,
+      allDeptIds,
     });
 
     const allowedList = ALLOWED_STATUSES.map((s) => `'${s}'`).join(', ');

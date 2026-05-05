@@ -37,7 +37,7 @@ export async function GET(req: Request) {
   sql += active.where;
 
   // apply whitelist (AI專案一部/二部)
-  const { dept1Id, dept2Id } = await getAiDeptIds();
+  const { dept1Id, dept2Id, allDeptIds } = await getAiDeptIds();
   const wl = buildWhitelistWhere({
     uName: String(uName),
     uDeptId: uDeptId ? String(uDeptId) : null,
@@ -45,6 +45,7 @@ export async function GET(req: Request) {
     departmentId: departmentId || null,
     dept1Id,
     dept2Id,
+    allDeptIds,
     scope: 'people',
   });
   sql += wl.where;
